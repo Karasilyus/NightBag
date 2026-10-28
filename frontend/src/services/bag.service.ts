@@ -30,6 +30,7 @@ const categoryDisplayName = (cat: string): string => {
   const map: Record<string, string> = {
     firin: 'Fırın',
     kafe: 'Kafe',
+    tatli: 'Tatlı',
     yemek: 'Yemek',
   };
   return map[cat] || cat;
@@ -40,6 +41,7 @@ const categoryToApi = (displayName: string): string => {
   const map: Record<string, string> = {
     'Fırın': 'firin',
     'Kafe': 'kafe',
+    'Tatlı': 'tatli',
     'Yemek': 'yemek',
     'Tümü': '',
   };

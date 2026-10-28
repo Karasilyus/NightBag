@@ -40,11 +40,12 @@ type rowScanner interface {
 
 func listingSelect(distanceExpr string) string {
 	return `SELECT l.id::text, b.id::text, b.name, l.title, l.category::text,
-		COALESCE(l.description, ''), l.content_tags, l.allergen_note,
-		l.original_value::float8, l.price::float8, l.quantity_total, l.quantity_remaining,
-		to_char(l.pickup_date, 'YYYY-MM-DD'), to_char(l.pickup_start, 'HH24:MI'), to_char(l.pickup_end, 'HH24:MI'),
-		l.photo_url, l.status::text, ST_X(b.geom)::float8, ST_Y(b.geom)::float8, ` + distanceExpr + `
-	FROM bag_listings l JOIN businesses b ON b.id = l.business_id `
+        COALESCE(l.description, ''), l.content_tags, l.allergen_note,
+        l.original_value::float8, l.price::float8, l.quantity_total, l.quantity_remaining,
+        to_char(l.pickup_date, 'YYYY-MM-DD'), to_char(l.pickup_start, 'HH24:MI'), to_char(l.pickup_end, 'HH24:MI'),
+        l.photo_url, l.status::text, ST_X(b.geom)::float8, ST_Y(b.geom)::float8, ` + distanceExpr + `,
+        b.rating::float8, b.review_count::int
+    FROM bag_listings l JOIN businesses b ON b.id = l.business_id `
 }
 
 func scanListing(row rowScanner) (domain.Listing, error) {
@@ -56,6 +57,7 @@ func scanListing(row rowScanner) (domain.Listing, error) {
 		&l.OriginalValue, &l.Price, &l.QuantityTotal, &l.QuantityRemaining,
 		&l.PickupDate, &l.PickupStart, &l.PickupEnd,
 		&l.PhotoURL, &l.Status, &l.Lon, &l.Lat, &l.DistanceM,
+		&l.Rating, &l.ReviewCount, // YENİ EKLENENLER
 	)
 	l.Category = domain.BagCategory(category)
 	if l.ContentTags == nil {
@@ -356,18 +358,107 @@ func (r *BagRepository) CompletePickup(ctx context.Context, ownerID, code string
 
 func (r *BagRepository) BusinessOverview(ctx context.Context, ownerID string) (*domain.BusinessOverview, error) {
 	var o domain.BusinessOverview
+	var title string
+	var photoURL *string
+
 	err := r.pool.QueryRow(ctx, `
-		SELECT COALESCE(SUM(l.quantity_total), 0)::int,
-		       COALESCE(SUM(l.quantity_total - l.quantity_remaining), 0)::int,
-		       COALESCE(SUM(l.quantity_remaining), 0)::int
-		FROM bag_listings l
-		JOIN businesses b ON b.id = l.business_id
-		WHERE b.owner_id = $1
-		  AND l.status <> 'draft'
-		  AND l.pickup_date = (now() AT TIME ZONE 'Europe/Istanbul')::date`, ownerID,
-	).Scan(&o.Published, &o.Reserved, &o.Remaining)
+        SELECT COALESCE(SUM(l.quantity_total), 0)::int,
+               COALESCE(SUM(l.quantity_total - l.quantity_remaining), 0)::int,
+               COALESCE(SUM(l.quantity_remaining), 0)::int,
+               MAX(l.title), MAX(l.photo_url)
+        FROM bag_listings l
+        JOIN businesses b ON b.id = l.business_id
+        WHERE b.owner_id = $1 AND l.status <> 'draft'
+          AND l.pickup_date = (now() AT TIME ZONE 'Europe/Istanbul')::date`, ownerID,
+	).Scan(&o.Published, &o.Reserved, &o.Remaining, &title, &photoURL)
+
+	if err == nil && o.Published > 0 {
+		o.TodaysBag = &domain.TodaysBag{Title: title, ImageUrl: photoURL}
+	}
+	return &o, err
+}
+
+func (r *BagRepository) BusinessReservations(ctx context.Context, ownerID string) ([]domain.Reservation, error) {
+	q := reservationSelect + ` WHERE b.owner_id = $1 AND r.status = 'pending_pickup' ORDER BY r.created_at ASC`
+
+	rows, err := r.pool.Query(ctx, q, ownerID)
 	if err != nil {
 		return nil, err
 	}
-	return &o, nil
+	defer rows.Close()
+
+	out := []domain.Reservation{}
+	for rows.Next() {
+		x, err := scanReservation(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, x)
+	}
+	return out, rows.Err()
+}
+
+func (r *BagRepository) GetUserStats(ctx context.Context, userID string) (*domain.UserStats, error) {
+	var stats domain.UserStats
+	err := r.pool.QueryRow(ctx, `
+        SELECT COALESCE(SUM(quantity), 0)::int,
+               COALESCE(SUM((unit_original_value - unit_price) * quantity), 0)::float8
+        FROM reservations
+        WHERE user_id = $1 AND status = 'picked_up'
+    `, userID).Scan(&stats.BagsSaved, &stats.MoneySaved)
+
+	if err != nil {
+		return nil, err
+	}
+	return &stats, nil
+}
+
+func (r *BagRepository) AddFavorite(ctx context.Context, userID, businessID string) error {
+	_, err := r.pool.Exec(ctx, `
+        INSERT INTO favorite_businesses (user_id, business_id) 
+        VALUES ($1, $2) ON CONFLICT DO NOTHING`, userID, businessID)
+	return err
+}
+
+func (r *BagRepository) RemoveFavorite(ctx context.Context, userID, businessID string) error {
+	_, err := r.pool.Exec(ctx, `
+        DELETE FROM favorite_businesses 
+        WHERE user_id = $1 AND business_id = $2`, userID, businessID)
+	return err
+}
+func (r *BagRepository) GetUser(ctx context.Context, id string) (*domain.User, error) {
+	var u domain.User
+	err := r.pool.QueryRow(ctx, `
+        SELECT id::text, full_name, email, role::text 
+        FROM users WHERE id = $1`, id,
+	).Scan(&u.ID, &u.FullName, &u.Email, &u.Role)
+
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, domain.ErrUserNotFound
+	}
+	return &u, err
+}
+
+func (r *BagRepository) ListFavoriteListings(ctx context.Context, userID string) ([]domain.Listing, error) {
+	// Favoriye alınan işletmelerin sadece 'published' olan (aktif) ilanlarını getirir
+	q := listingSelect("NULL::float8") + `
+        JOIN favorite_businesses fb ON fb.business_id = b.id
+        WHERE fb.user_id = $1 AND l.status = 'published' AND l.quantity_remaining > 0
+        ORDER BY l.pickup_date ASC, l.pickup_end ASC`
+
+	rows, err := r.pool.Query(ctx, q, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	out := []domain.Listing{}
+	for rows.Next() {
+		l, err := scanListing(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, l)
+	}
+	return out, rows.Err()
 }

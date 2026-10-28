@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import theme from '../constants/theme';
 import { businessService } from '../services/business.service';
 
-const CATEGORIES = ['Fırın', 'Kafe', 'Yemek'];
+const CATEGORIES = ['Fırın', 'Kafe', 'Tatlı', 'Yemek'];
 
 const CreateBagScreen = ({ route, navigation }: any) => {
   const [activeCategory, setActiveCategory] = useState('Fırın');
@@ -15,12 +15,14 @@ const CreateBagScreen = ({ route, navigation }: any) => {
   const [pickupEnd, setPickupEnd] = useState('21:00');
   const [isPublishing, setIsPublishing] = useState(false);
 
-  const businessId = route?.params?.businessId || '00000000-0000-0000-0000-000000000001';
+  // Furkan'ın 000002_seed.up.sql dosyasındaki Moda Fırını ID'si varsayılan olarak tanımlandı
+  const businessId = route?.params?.businessId || '33333333-3333-3333-3333-333333333333';
 
   const categoryToApi = (cat: string): string => {
     const map: Record<string, string> = {
       'Fırın': 'firin',
       'Kafe': 'kafe',
+      'Tatlı': 'tatli',
       'Yemek': 'yemek',
     };
     return map[cat] || 'firin';

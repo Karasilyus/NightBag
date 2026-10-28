@@ -40,6 +40,8 @@ type Listing struct {
 	Lon               float64     `json:"lon"`
 	Lat               float64     `json:"lat"`
 	DistanceM         *float64    `json:"distance_m,omitempty"`
+	Rating            float64     `json:"rating"`
+	ReviewCount       int         `json:"review_count"`
 }
 
 type NearbyFilter struct {
@@ -96,9 +98,26 @@ type Reservation struct {
 	PickedUpAt      *time.Time `json:"picked_up_at,omitempty"`
 }
 
-// BusinessOverview: "İşletme genel bakış" ekranındaki bugünün sayıları.
+type TodaysBag struct {
+	Title    string  `json:"title"`
+	ImageUrl *string `json:"imageUrl"`
+}
+
 type BusinessOverview struct {
-	Published int `json:"published"`
-	Reserved  int `json:"reserved"`
-	Remaining int `json:"remaining"`
+	Published int        `json:"published"`
+	Reserved  int        `json:"reserved"`
+	Remaining int        `json:"remaining"`
+	TodaysBag *TodaysBag `json:"todaysBag"`
+}
+
+type UserStats struct {
+	BagsSaved  int     `json:"bags_saved"`
+	MoneySaved float64 `json:"money_saved"`
+}
+
+type User struct {
+	ID       string `json:"id"`
+	FullName string `json:"full_name"`
+	Email    string `json:"email"`
+	Role     string `json:"role"`
 }

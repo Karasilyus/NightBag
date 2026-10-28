@@ -11,4 +11,10 @@ type BagRepository interface {
 	CancelReservation(ctx context.Context, userID, reservationID string) error
 	CompletePickup(ctx context.Context, ownerID, code string) (*Reservation, error)
 	BusinessOverview(ctx context.Context, ownerID string) (*BusinessOverview, error)
+	BusinessReservations(ctx context.Context, ownerID string) ([]Reservation, error)
+	GetUserStats(ctx context.Context, userID string) (*UserStats, error)
+	AddFavorite(ctx context.Context, userID, businessID string) error
+	RemoveFavorite(ctx context.Context, userID, businessID string) error
+	GetUser(ctx context.Context, id string) (*User, error)
+	ListFavoriteListings(ctx context.Context, userID string) ([]Listing, error)
 }

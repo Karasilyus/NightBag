@@ -138,3 +138,27 @@ func (s *BagService) CompletePickup(ctx context.Context, ownerID, code string) (
 func (s *BagService) BusinessOverview(ctx context.Context, ownerID string) (*domain.BusinessOverview, error) {
 	return s.repo.BusinessOverview(ctx, ownerID)
 }
+
+func (s *BagService) BusinessReservations(ctx context.Context, ownerID string) ([]domain.Reservation, error) {
+	return s.repo.BusinessReservations(ctx, ownerID)
+}
+
+func (s *BagService) GetUserStats(ctx context.Context, userID string) (*domain.UserStats, error) {
+	return s.repo.GetUserStats(ctx, userID)
+}
+
+func (s *BagService) AddFavorite(ctx context.Context, userID, businessID string) error {
+	return s.repo.AddFavorite(ctx, userID, businessID)
+}
+
+func (s *BagService) RemoveFavorite(ctx context.Context, userID, businessID string) error {
+	return s.repo.RemoveFavorite(ctx, userID, businessID)
+}
+
+func (s *BagService) GetUser(ctx context.Context, id string) (*domain.User, error) {
+	return s.repo.GetUser(ctx, id)
+}
+
+func (s *BagService) ListFavoriteListings(ctx context.Context, userID string) ([]domain.Listing, error) {
+	return s.repo.ListFavoriteListings(ctx, userID)
+}

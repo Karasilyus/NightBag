@@ -20,19 +20,21 @@ export const apiClient = axios.create({
 });
 
 // Request Interceptor: Her istekten önce X-User-ID başlığını ekler.
-// Backend şu an JWT yerine bu başlığı kullanıyor (geçici kimlik doğrulama).
+// Backend geçici olarak bu başlığı bekliyor.
 apiClient.interceptors.request.use(
   async (config) => {
     try {
       const userJson = await AsyncStorage.getItem('currentUser');
       if (userJson) {
         const user = JSON.parse(userJson);
-        if (user?.id) {
-          config.headers['X-User-ID'] = user.id;
-        }
+        const userId = user?.owner_id || user?.id || '11111111-1111-1111-1111-111111111111';
+        config.headers['X-User-ID'] = userId;
+      } else {
+        // Oturum açılmamışsa backend seed müşterisi ID'si (11111111-1111-1111-1111-111111111111) kullanılır
+        config.headers['X-User-ID'] = '11111111-1111-1111-1111-111111111111';
       }
     } catch {
-      // Token yoksa devam et (public endpoint'ler için sorun değil)
+      config.headers['X-User-ID'] = '11111111-1111-1111-1111-111111111111';
     }
     return config;
   },

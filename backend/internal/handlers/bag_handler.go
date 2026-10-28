@@ -28,13 +28,20 @@ func (h *BagHandler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/listings/{id}", h.getListing)
 
 	// Müşteri
+	mux.HandleFunc("GET /api/v1/users/me/stats", h.auth(h.getUserStats))
 	mux.HandleFunc("POST /api/v1/listings/{id}/reserve", h.auth(h.reserve))
 	mux.HandleFunc("GET /api/v1/reservations", h.auth(h.listReservations))
 	mux.HandleFunc("POST /api/v1/reservations/{id}/cancel", h.auth(h.cancelReservation))
 
-	// İşletme
+	mux.HandleFunc("POST /api/v1/favorites/{businessID}", h.auth(h.addFavorite))
+	mux.HandleFunc("DELETE /api/v1/favorites/{businessID}", h.auth(h.removeFavorite))
+
+	mux.HandleFunc("GET /api/v1/users/me", h.auth(h.getMe))
+	mux.HandleFunc("GET /api/v1/favorites", h.auth(h.listFavorites))
+
 	mux.HandleFunc("POST /api/v1/business/{businessID}/listings", h.auth(h.createListing))
 	mux.HandleFunc("GET /api/v1/business/overview", h.auth(h.overview))
+	mux.HandleFunc("GET /api/v1/business/reservations", h.auth(h.businessReservations))
 	mux.HandleFunc("POST /api/v1/business/pickups", h.auth(h.completePickup))
 }
 
@@ -51,6 +58,14 @@ func (h *BagHandler) auth(next func(http.ResponseWriter, *http.Request, string))
 		}
 		next(w, r, uid)
 	}
+}
+func (h *BagHandler) businessReservations(w http.ResponseWriter, r *http.Request, ownerID string) {
+	items, err := h.svc.BusinessReservations(r.Context(), ownerID)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, items)
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
@@ -268,4 +283,55 @@ func (h *BagHandler) completePickup(w http.ResponseWriter, r *http.Request, owne
 		return
 	}
 	writeJSON(w, http.StatusOK, res)
+}
+
+func (h *BagHandler) getUserStats(w http.ResponseWriter, r *http.Request, userID string) {
+	stats, err := h.svc.GetUserStats(r.Context(), userID)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, stats)
+}
+
+func (h *BagHandler) addFavorite(w http.ResponseWriter, r *http.Request, userID string) {
+	businessID, ok := pathUUID(w, r, "businessID")
+	if !ok {
+		return
+	}
+	if err := h.svc.AddFavorite(r.Context(), userID, businessID); err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, map[string]string{"status": "ok"})
+}
+
+func (h *BagHandler) removeFavorite(w http.ResponseWriter, r *http.Request, userID string) {
+	businessID, ok := pathUUID(w, r, "businessID")
+	if !ok {
+		return
+	}
+	if err := h.svc.RemoveFavorite(r.Context(), userID, businessID); err != nil {
+		writeError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *BagHandler) getMe(w http.ResponseWriter, r *http.Request, userID string) {
+	u, err := h.svc.GetUser(r.Context(), userID)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, u)
+}
+
+func (h *BagHandler) listFavorites(w http.ResponseWriter, r *http.Request, userID string) {
+	items, err := h.svc.ListFavoriteListings(r.Context(), userID)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, items)
 }
