@@ -1,0 +1,45 @@
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_USER: nightbag
+      POSTGRES_PASSWORD: nightbag
+      POSTGRES_DB: nightbag
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nightbag -d nightbag"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  migrate:
+    image: migrate/migrate:v4.17.1
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./db/migrations:/migrations
+    command:
+      [
+        "-path=/migrations",
+        "-database=postgres://nightbag:nightbag@db:5432/nightbag?sslmode=disable",
+        "up",
+      ]
+
+  api:
+    build: .
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      DATABASE_URL: postgres://nightbag:nightbag@db:5432/nightbag?sslmode=disable
+      PORT: "8080"
+      CORS_ORIGIN: "*"
+    ports:
+      - "8080:8080"
+
+volumes:
+  pgdata:

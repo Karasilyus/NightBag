@@ -1,5 +1,19 @@
-import { apiClient } from './api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+
+// NOT: Backend'de henüz auth endpoint'i bulunmuyor.
+// Şu an kimlik doğrulama X-User-ID header'ı ile yapılıyor (geçici).
+// Backend'e auth modülü eklendiğinde bu dosya güncellenecek.
+// Şu an kayıt/giriş işlemleri AsyncStorage'da mock olarak tutuluyor,
+// ancak user.id olarak backend'in beklediği UUID formatı kullanılıyor.
+
+const generateUUID = (): string => {
+  // Basit UUID v4 üreteci (crypto.randomUUID olmadığında)
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = Math.random() * 16 | 0;
+    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+};
 
 export const authService = {
   login: async (credentials: any) => {
@@ -8,19 +22,21 @@ export const authService = {
         try {
           const usersJson = await AsyncStorage.getItem('mockUsers');
           const users = usersJson ? JSON.parse(usersJson) : [];
-          
-          const user = users.find((u: any) => u.email === credentials.email && u.password === credentials.password);
-          
+
+          const user = users.find(
+            (u: any) => u.email === credentials.email && u.password === credentials.password
+          );
+
           if (user) {
             await AsyncStorage.setItem('currentUser', JSON.stringify(user));
-            resolve({ data: { token: 'fake-jwt-token-123', user } });
+            resolve({ data: { token: 'placeholder-token', user } });
           } else {
             reject(new Error('E-posta veya şifre hatalı!'));
           }
-        } catch(e) {
+        } catch {
           reject(new Error('Giriş yapılırken bir sorun oluştu.'));
         }
-      }, 1000); 
+      }, 500);
     });
   },
 
@@ -34,28 +50,30 @@ export const authService = {
         try {
           const usersJson = await AsyncStorage.getItem('mockUsers');
           const users = usersJson ? JSON.parse(usersJson) : [];
-          
+
           const exists = users.find((u: any) => u.email === userData.email);
           if (exists) {
             return reject(new Error('Bu e-posta adresi zaten kayıtlı!'));
           }
 
+          // Backend UUID formatı kullanılıyor ki X-User-ID header'ında kabul edilsin
           const newUser = {
-            id: Date.now(),
+            id: generateUUID(),
             fullName: userData.fullName,
             email: userData.email,
-            password: userData.password // Sadece test amaçlı, normalde asla böyle kaydedilmez!
+            password: userData.password, // Sadece lokal mock, backend'e gönderilmiyor
+            role: userData.role || 'customer',
           };
-          
+
           users.push(newUser);
           await AsyncStorage.setItem('mockUsers', JSON.stringify(users));
           await AsyncStorage.setItem('currentUser', JSON.stringify(newUser));
-          
-          resolve({ data: { token: 'fake-jwt-token-123', user: newUser } });
-        } catch(e) {
+
+          resolve({ data: { token: 'placeholder-token', user: newUser } });
+        } catch {
           reject(new Error('Kayıt olurken bir sorun oluştu.'));
         }
-      }, 1000);
+      }, 500);
     });
   },
 
@@ -67,22 +85,19 @@ export const authService = {
         return {
           ...user,
           profileStats: {
-            savedBags: 2,
-            moneySaved: 420
+            savedBags: 0,
+            moneySaved: 0,
           },
-          savedBusinesses: [
-            { id: '1', name: 'Moda Fırını', type: 'Fırın', distance: '850m', imageUrl: 'https://images.unsplash.com/photo-1509440159596-0249088772ff?q=80&w=1000&auto=format&fit=crop' },
-            { id: '2', name: 'Dem Kafe', type: 'Kafe', distance: '1.2km', imageUrl: 'https://images.unsplash.com/photo-1554118811-1e0d58224f24?q=80&w=1000&auto=format&fit=crop' }
-          ]
+          savedBusinesses: [],
         };
       }
       return null;
-    } catch(e) {
+    } catch {
       return null;
     }
   },
 
   logout: async () => {
     await AsyncStorage.removeItem('currentUser');
-  }
+  },
 };
