@@ -99,7 +99,7 @@ const BagDetailScreen = ({ route, navigation }: any) => {
         </View>
         <TouchableOpacity
           style={styles.reserveBtn}
-          onPress={() => navigation.navigate('ReservationReview')}
+          onPress={() => navigation.navigate('ReservationReview', { bag })}
         >
           <Text style={styles.reserveBtnText}>Çantayı ayırt</Text>
           <Ionicons name="arrow-forward" size={20} color={theme.COLORS.card} />

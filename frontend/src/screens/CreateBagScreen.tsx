@@ -2,27 +2,75 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, TextInput, ActivityIndicator, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import theme from '../constants/theme';
+import { businessService } from '../services/business.service';
 
-const CATEGORIES = ['Fırın', 'Kafe', 'Tatlı', 'Yemek'];
+const CATEGORIES = ['Fırın', 'Kafe', 'Yemek'];
 
-const CreateBagScreen = ({ navigation }: any) => {
+const CreateBagScreen = ({ route, navigation }: any) => {
   const [activeCategory, setActiveCategory] = useState('Fırın');
+  const [originalPrice, setOriginalPrice] = useState('350');
+  const [price, setPrice] = useState('125');
   const [bagCount, setBagCount] = useState(12);
+  const [pickupStart, setPickupStart] = useState('20:00');
+  const [pickupEnd, setPickupEnd] = useState('21:00');
   const [isPublishing, setIsPublishing] = useState(false);
 
-  const handlePublish = () => {
+  const businessId = route?.params?.businessId || '00000000-0000-0000-0000-000000000001';
+
+  const categoryToApi = (cat: string): string => {
+    const map: Record<string, string> = {
+      'Fırın': 'firin',
+      'Kafe': 'kafe',
+      'Yemek': 'yemek',
+    };
+    return map[cat] || 'firin';
+  };
+
+  const handlePublish = async () => {
+    const origVal = parseFloat(originalPrice.replace(',', '.'));
+    const prVal = parseFloat(price.replace(',', '.'));
+
+    if (isNaN(origVal) || origVal <= 0) {
+      Alert.alert('Hata', 'Lütfen geçerli bir orijinal değer girin.');
+      return;
+    }
+    if (isNaN(prVal) || prVal <= 0 || prVal > origVal) {
+      Alert.alert('Hata', 'İndirimli fiyat 0\'dan büyük ve orijinal değerden küçük olmalıdır.');
+      return;
+    }
+
+    const startFormatted = pickupStart.replace('.', ':').trim();
+    const endFormatted = pickupEnd.replace('.', ':').trim();
+
     setIsPublishing(true);
-    // Simüle edilmiş API isteği (800ms)
-    setTimeout(() => {
-      setIsPublishing(false);
-      // Web'de alert fallback
-      if (typeof window !== 'undefined' && window.alert) {
-        window.alert('Başarılı! Çantalar başarıyla yayınlandı.');
-      } else {
-        Alert.alert('Başarılı', 'Çantalar başarıyla yayınlandı.');
-      }
+    try {
+      // Bugünün tarihi YYYY-MM-DD
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = String(now.getMonth() + 1).padStart(2, '0');
+      const day = String(now.getDate()).padStart(2, '0');
+      const todayDate = `${year}-${month}-${day}`;
+
+      await businessService.createListing(businessId, {
+        title: `${activeCategory} sürpriz çantası`,
+        category: categoryToApi(activeCategory),
+        description: `Günün taze lezzetleri, işletmenin sürpriz seçkisiyle.`,
+        originalValue: origVal,
+        price: prVal,
+        quantity: bagCount,
+        pickupDate: todayDate,
+        pickupStart: startFormatted,
+        pickupEnd: endFormatted,
+      });
+
+      Alert.alert('Başarılı', `${bagCount} adet sürpriz çanta başarıyla yayınlandı!`);
       navigation.goBack();
-    }, 800);
+    } catch (error: any) {
+      const errMsg = error.response?.data?.error || error.message || 'Çantalar yayınlanırken bir sorun oluştu.';
+      Alert.alert('Yayınlama Hatası', errMsg);
+    } finally {
+      setIsPublishing(false);
+    }
   };
 
   return (
@@ -33,7 +81,7 @@ const CreateBagScreen = ({ navigation }: any) => {
         </TouchableOpacity>
         <View style={styles.headerTitleBox}>
           <Text style={styles.headerTitle}>Çanta yayınla</Text>
-          <Text style={styles.headerSubtitle}>Moda Fırını • İşletme paneli</Text>
+          <Text style={styles.headerSubtitle}>İşletme paneli</Text>
         </View>
         <View style={styles.iconBtn} />
       </View>
@@ -43,7 +91,9 @@ const CreateBagScreen = ({ navigation }: any) => {
           <Ionicons name="bag-handle-outline" size={24} color={theme.COLORS.primary} />
           <View style={{ flex: 1 }}>
             <Text style={styles.infoBannerTitle}>Çantayı hazırla, tek tıkla ürün yayınla.</Text>
-            <Text style={styles.infoBannerDesc}>Ürün envanteri girmene gerekmez. Kategori, çanta sayısı ve teslim saatini belirlemen yeterli.</Text>
+            <Text style={styles.infoBannerDesc}>
+              Ürün envanteri girmene gerekmez. Kategori, çanta sayısı ve teslim saatini belirlemen yeterli.
+            </Text>
           </View>
         </View>
 
@@ -66,14 +116,24 @@ const CreateBagScreen = ({ navigation }: any) => {
           <View style={styles.priceInputBox}>
             <Text style={styles.inputLabel}>Yaklaşık orijinal değer</Text>
             <View style={styles.inputWrapper}>
-              <TextInput style={styles.input} defaultValue="350" keyboardType="numeric" />
+              <TextInput 
+                style={styles.input} 
+                value={originalPrice} 
+                onChangeText={setOriginalPrice}
+                keyboardType="numeric" 
+              />
               <Text style={styles.currency}>₺</Text>
             </View>
           </View>
           <View style={styles.priceInputBox}>
             <Text style={styles.inputLabel}>İndirimli çanta fiyatı</Text>
             <View style={styles.inputWrapper}>
-              <TextInput style={styles.input} defaultValue="125" keyboardType="numeric" />
+              <TextInput 
+                style={styles.input} 
+                value={price} 
+                onChangeText={setPrice}
+                keyboardType="numeric" 
+              />
               <Text style={styles.currency}>₺</Text>
             </View>
             <Text style={styles.helperText}>%50'den ucuza gelir</Text>
@@ -95,24 +155,34 @@ const CreateBagScreen = ({ navigation }: any) => {
         <View style={styles.timeSectionHeader}>
           <Text style={styles.sectionTitle}>Teslim alma aralığı</Text>
           <View style={styles.dateSelector}>
-            <Text style={styles.dateText}>Bugün, 6 Ekim</Text>
-            <Ionicons name="pencil" size={12} color={theme.COLORS.textSecondary} />
+            <Text style={styles.dateText}>Bugün</Text>
+            <Ionicons name="calendar-outline" size={14} color={theme.COLORS.primary} />
           </View>
         </View>
 
         <View style={styles.timeRow}>
           <View style={styles.timeBox}>
-            <Text style={styles.inputLabel}>BAŞLANGIÇ</Text>
+            <Text style={styles.inputLabel}>BAŞLANGIÇ (SS:DD)</Text>
             <View style={styles.timeInputWrapper}>
               <Ionicons name="time-outline" size={20} color={theme.COLORS.textSecondary} />
-              <TextInput style={styles.timeInput} defaultValue="20.00" />
+              <TextInput 
+                style={styles.timeInput} 
+                value={pickupStart} 
+                onChangeText={setPickupStart}
+                placeholder="20:00"
+              />
             </View>
           </View>
           <View style={styles.timeBox}>
-            <Text style={styles.inputLabel}>BİTİŞ</Text>
+            <Text style={styles.inputLabel}>BİTİŞ (SS:DD)</Text>
             <View style={styles.timeInputWrapper}>
               <Ionicons name="time-outline" size={20} color={theme.COLORS.textSecondary} />
-              <TextInput style={styles.timeInput} defaultValue="21.00" />
+              <TextInput 
+                style={styles.timeInput} 
+                value={pickupEnd} 
+                onChangeText={setPickupEnd}
+                placeholder="21:00"
+              />
             </View>
           </View>
         </View>
@@ -122,7 +192,7 @@ const CreateBagScreen = ({ navigation }: any) => {
           <Ionicons name="eye-outline" size={20} color={theme.COLORS.textSecondary} />
           <View>
             <Text style={styles.previewTitle}>Keşfette böyle görünecek</Text>
-            <Text style={styles.previewDesc}>Fırın sürpriz çantası - 125 ₺{"\n"}12 çanta • Bugün 20.00-21.00</Text>
+            <Text style={styles.previewDesc}>{activeCategory} sürpriz çantası - {price} ₺{"\n"}{bagCount} çanta • Bugün {pickupStart}-{pickupEnd}</Text>
           </View>
         </View>
       </ScrollView>

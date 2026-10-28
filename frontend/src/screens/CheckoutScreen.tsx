@@ -1,11 +1,43 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, SafeAreaView } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, SafeAreaView, ActivityIndicator, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import theme from '../constants/theme';
+import { reservationService } from '../services/reservation.service';
 
-const CheckoutScreen = ({ navigation }: any) => {
+const CheckoutScreen = ({ route, navigation }: any) => {
+  const bag = route?.params?.bag;
+  const currentBag = bag || {
+    id: '',
+    businessName: 'Moda Fırını',
+    bagType: 'Fırın sürpriz çantası',
+    price: 125,
+    originalPrice: 350,
+    timeInfo: 'Bugün, 20.00-21.00',
+    imageUrl: 'https://images.unsplash.com/photo-1509440159596-0249088772ff?q=80&w=1000&auto=format&fit=crop',
+    distance: 'Kadıköy',
+  };
+
   const [quantity, setQuantity] = useState(1);
-  const pricePerBag = 125;
+  const [isReserving, setIsReserving] = useState(false);
+  const pricePerBag = currentBag.price;
+
+  const handleConfirmReservation = async () => {
+    setIsReserving(true);
+    try {
+      if (currentBag.id) {
+        const res = await reservationService.reserve(currentBag.id, quantity);
+        navigation.navigate('ReservationConfirmed', { reservation: res });
+      } else {
+        // ID olmadan doğrudan geçiş yapıldıysa statik veriyle yönlendir
+        navigation.navigate('ReservationConfirmed');
+      }
+    } catch (error: any) {
+      const errMsg = error.response?.data?.error || error.message || 'Rezervasyon oluşturulamadı. Lütfen tekrar deneyin.';
+      Alert.alert('Rezervasyon Hatası', errMsg);
+    } finally {
+      setIsReserving(false);
+    }
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -15,7 +47,6 @@ const CheckoutScreen = ({ navigation }: any) => {
           <Ionicons name="arrow-back" size={24} color={theme.COLORS.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Çantanı ayırt</Text>
-        {/* Sağ taraf boşluğu dengelemek için */}
         <View style={styles.iconBtn} />
       </View>
 
@@ -25,17 +56,17 @@ const CheckoutScreen = ({ navigation }: any) => {
         {/* Çanta Özeti Kartı */}
         <View style={styles.bagCard}>
           <Image 
-            source={{ uri: 'https://images.unsplash.com/photo-1509440159596-0249088772ff?q=80&w=1000&auto=format&fit=crop' }} 
+            source={{ uri: currentBag.imageUrl }} 
             style={styles.cardImage} 
           />
           <View style={styles.cardInfo}>
-            <Text style={styles.businessName}>Moda Fırını</Text>
-            <Text style={styles.bagTitle}>Fırın sürpriz çantası</Text>
+            <Text style={styles.businessName}>{currentBag.businessName}</Text>
+            <Text style={styles.bagTitle}>{currentBag.bagType}</Text>
             <View style={styles.priceRow}>
               <Text style={styles.price}>{pricePerBag} ₺</Text>
-              <Text style={styles.originalPrice}>350 ₺</Text>
+              <Text style={styles.originalPrice}>{currentBag.originalPrice} ₺</Text>
             </View>
-            <Text style={styles.timeInfo}>Bugün, 20.00-21.00</Text>
+            <Text style={styles.timeInfo}>{currentBag.timeInfo}</Text>
           </View>
         </View>
 
@@ -49,7 +80,7 @@ const CheckoutScreen = ({ navigation }: any) => {
             <TouchableOpacity 
               style={[styles.qBtn, quantity <= 1 && styles.qBtnDisabled]} 
               onPress={() => setQuantity(Math.max(1, quantity - 1))}
-              disabled={quantity <= 1}
+              disabled={quantity <= 1 || isReserving}
             >
               <Ionicons name="remove" size={20} color={quantity <= 1 ? theme.COLORS.border : theme.COLORS.text} />
             </TouchableOpacity>
@@ -57,7 +88,7 @@ const CheckoutScreen = ({ navigation }: any) => {
             <TouchableOpacity 
               style={[styles.qBtn, quantity >= 4 && styles.qBtnDisabled]} 
               onPress={() => setQuantity(Math.min(4, quantity + 1))}
-              disabled={quantity >= 4}
+              disabled={quantity >= 4 || isReserving}
             >
               <Ionicons name="add" size={20} color={theme.COLORS.primary} />
             </TouchableOpacity>
@@ -70,8 +101,8 @@ const CheckoutScreen = ({ navigation }: any) => {
           <View style={styles.infoRow}>
             <Ionicons name="calendar-outline" size={20} color={theme.COLORS.text} />
             <View style={styles.infoTextContainer}>
-              <Text style={styles.infoBold}>6 Ekim, Salı • 20.00-21.00</Text>
-              <Text style={styles.infoLight}>Moda Fırını • Moda Cad. No: 42, Kadıköy</Text>
+              <Text style={styles.infoBold}>{currentBag.timeInfo}</Text>
+              <Text style={styles.infoLight}>{currentBag.businessName}</Text>
             </View>
           </View>
           <View style={styles.infoRow}>
@@ -86,7 +117,7 @@ const CheckoutScreen = ({ navigation }: any) => {
         {/* Toplam Tutar */}
         <View style={styles.totalSection}>
           <View style={styles.totalRow}>
-            <Text style={styles.totalLabel}>{quantity} × Fırın sürpriz çantası</Text>
+            <Text style={styles.totalLabel}>{quantity} × {currentBag.bagType}</Text>
             <Text style={styles.totalValue}>{quantity * pricePerBag} ₺</Text>
           </View>
           <View style={styles.totalSummaryRow}>
@@ -107,11 +138,18 @@ const CheckoutScreen = ({ navigation }: any) => {
       {/* Alt Sabit Bar */}
       <View style={styles.bottomBar}>
         <TouchableOpacity 
-          style={styles.confirmBtn} 
-          onPress={() => navigation.navigate('ReservationConfirmed')}
+          style={[styles.confirmBtn, isReserving && { opacity: 0.7 }]} 
+          onPress={handleConfirmReservation}
+          disabled={isReserving}
         >
-          <Text style={styles.confirmBtnText}>Rezervasyonu onayla</Text>
-          <Ionicons name="arrow-forward" size={20} color={theme.COLORS.card} />
+          {isReserving ? (
+            <ActivityIndicator color={theme.COLORS.card} />
+          ) : (
+            <>
+              <Text style={styles.confirmBtnText}>Rezervasyonu onayla</Text>
+              <Ionicons name="arrow-forward" size={20} color={theme.COLORS.card} />
+            </>
+          )}
         </TouchableOpacity>
         <Text style={styles.bottomNote}>Bu adımda ödeme alınmaz.</Text>
       </View>

@@ -3,7 +3,17 @@ import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, Image } from 'r
 import { Ionicons } from '@expo/vector-icons';
 import theme from '../constants/theme';
 
-const OrderSuccessScreen = ({ navigation }: any) => {
+const OrderSuccessScreen = ({ route, navigation }: any) => {
+  const reservation = route?.params?.reservation;
+  const pickupCode = reservation?.code || 'NB-482615';
+  const businessName = reservation?.businessName || 'Moda Fırını';
+  const bagTitle = reservation?.bagTitle || 'Fırın sürpriz çantası';
+  const timeInfo = reservation?.timeInfo || '20.00-21.00';
+  const date = reservation?.date || 'Bugün';
+  const quantity = reservation?.quantity || 1;
+  const price = reservation?.price || 125;
+  const imageUrl = reservation?.imageUrl || 'https://images.unsplash.com/photo-1509440159596-0249088772ff?q=80&w=1000&auto=format&fit=crop';
+
   return (
     <SafeAreaView style={styles.container}>
       {/* Üst Bar */}
@@ -19,34 +29,34 @@ const OrderSuccessScreen = ({ navigation }: any) => {
 
       <View style={styles.content}>
         <Text style={styles.title}>Çantan seni bekliyor!</Text>
-        <Text style={styles.subtitle}>Moda Fırını'ndaki çantan başarıyla ayrıldı.</Text>
+        <Text style={styles.subtitle}>{businessName}'ndaki çantan başarıyla ayrıldı.</Text>
 
         {/* Ana Yeşil Kart */}
         <View style={styles.successCard}>
           <View style={styles.cardHeader}>
             <View>
               <Text style={styles.cardLabel}>TESLİM ALMA ZAMANI</Text>
-              <Text style={styles.cardTime}>20.00-21.00</Text>
+              <Text style={styles.cardTime}>{timeInfo}</Text>
             </View>
-            <Text style={styles.cardDate}>6 Ekim, Salı</Text>
+            <Text style={styles.cardDate}>{date}</Text>
           </View>
 
           <View style={styles.cardBody}>
             <Image 
-              source={{ uri: 'https://images.unsplash.com/photo-1509440159596-0249088772ff?q=80&w=1000&auto=format&fit=crop' }} 
+              source={{ uri: imageUrl }} 
               style={styles.cardImage} 
             />
             <View style={styles.cardInfo}>
-              <Text style={styles.businessName}>Moda Fırını</Text>
-              <Text style={styles.bagTitle}>Fırın sürpriz çantası</Text>
-              <Text style={styles.bagDetails}>1 çanta • 125 ₺</Text>
+              <Text style={styles.businessName}>{businessName}</Text>
+              <Text style={styles.bagTitle}>{bagTitle}</Text>
+              <Text style={styles.bagDetails}>{quantity} çanta • {price} ₺</Text>
             </View>
           </View>
 
           <View style={styles.codeContainer}>
             <Text style={styles.codeLabel}>TESLİM ALMA KODUN</Text>
             <View style={styles.codeRow}>
-              <Text style={styles.codeText}>NB-4826</Text>
+              <Text style={styles.codeText}>{pickupCode}</Text>
               <Ionicons name="copy-outline" size={20} color={theme.COLORS.primary} />
             </View>
             <Text style={styles.codeHint}>Bu kodu işletmedeki görevliye göster.</Text>
@@ -59,7 +69,7 @@ const OrderSuccessScreen = ({ navigation }: any) => {
             <View style={styles.stepNumber}><Text style={styles.stepNumberText}>1</Text></View>
             <View style={styles.stepText}>
               <Text style={styles.stepTitle}>Teslim saatinde gel</Text>
-              <Text style={styles.stepDesc}>Moda Cad. No: 42, Kadıköy</Text>
+              <Text style={styles.stepDesc}>{businessName}</Text>
             </View>
           </View>
           <View style={styles.stepLine} />
