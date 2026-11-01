@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, SafeAreaView, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, SafeAreaView, ActivityIndicator, Modal, Pressable, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import theme from '../constants/theme';
 import SurpriseBagCard from '../components/SurpriseBagCard';
 import { bagService } from '../services/bag.service';
+import { preferencesService, UserPreferences } from '../services/preferences.service';
 
 const CATEGORIES = ['Tümü', 'Fırın', 'Kafe', 'Tatlı', 'Yemek'];
 
@@ -12,13 +13,30 @@ const HomeScreen = ({ navigation }: any) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [bags, setBags] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [preferences, setPreferences] = useState<UserPreferences>({
+    searchRadiusKm: 5,
+    notificationsEnabled: true,
+    location: null,
+  });
+  const [isFilterVisible, setIsFilterVisible] = useState(false);
 
-  // Veritabanından (Mock API'den) verileri çeken fonksiyon
+  useEffect(() => {
+    preferencesService.getPreferences()
+      .then(setPreferences)
+      .catch((error) => console.error('Kullanıcı tercihleri yüklenemedi:', error));
+  }, []);
+
   useEffect(() => {
     const fetchBags = async () => {
       setIsLoading(true);
       try {
-        const response = await bagService.getBags(activeCategory, searchQuery);
+        const response = await bagService.getBags(
+          activeCategory,
+          searchQuery,
+          preferences.location?.latitude,
+          preferences.location?.longitude,
+          preferences.searchRadiusKm * 1000
+        );
         setBags(response.data);
       } catch (error) {
         console.error("Çantalar yüklenemedi", error);
@@ -28,7 +46,7 @@ const HomeScreen = ({ navigation }: any) => {
     };
 
     fetchBags();
-  }, [activeCategory, searchQuery]);
+  }, [activeCategory, searchQuery, preferences]);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -37,13 +55,19 @@ const HomeScreen = ({ navigation }: any) => {
         <View style={styles.locationRow}>
           <View>
             <Text style={styles.locationLabel}>BULUNDUĞUN YER</Text>
-            <View style={styles.locationSelector}>
+            <TouchableOpacity
+              style={styles.locationSelector}
+              onPress={() => navigation.navigate('LocationPicker')}
+              accessibilityRole="button"
+            >
               <Ionicons name="location-sharp" size={16} color={theme.COLORS.primary} />
-              <Text style={styles.locationText}>Kadıköy, İstanbul</Text>
+              <Text style={styles.locationText}>
+                {preferences.location?.label || 'Kadıköy, İstanbul'}
+              </Text>
               <Ionicons name="chevron-down" size={16} color={theme.COLORS.text} />
-            </View>
+            </TouchableOpacity>
           </View>
-          <TouchableOpacity style={styles.filterBtn}>
+          <TouchableOpacity style={styles.filterBtn} onPress={() => setIsFilterVisible(true)} accessibilityRole="button" accessibilityLabel="Arama mesafesini ayarla">
             <Ionicons name="options-outline" size={24} color={theme.COLORS.text} />
           </TouchableOpacity>
         </View>
@@ -78,6 +102,40 @@ const HomeScreen = ({ navigation }: any) => {
             </TouchableOpacity>
           ))}
         </ScrollView>
+
+        <Modal
+          visible={isFilterVisible}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setIsFilterVisible(false)}
+        >
+          <Pressable style={styles.modalBackdrop} onPress={() => setIsFilterVisible(false)}>
+            <Pressable style={styles.filterModal} onPress={(event) => event.stopPropagation()}>
+              <Text style={styles.filterTitle}>Arama mesafesi</Text>
+              {[2, 5, 10, 20].map((radius) => (
+                <TouchableOpacity
+                  key={radius}
+                  style={styles.radiusOption}
+                  onPress={async () => {
+                    try {
+                      const updated = await preferencesService.updatePreferences({ searchRadiusKm: radius });
+                      setPreferences(updated);
+                      setIsFilterVisible(false);
+                    } catch (error) {
+                      console.error('Arama mesafesi kaydedilemedi:', error);
+                      Alert.alert('Hata', 'Arama mesafesi kaydedilemedi. Lütfen tekrar deneyin.');
+                    }
+                  }}
+                >
+                  <Text style={styles.radiusText}>{radius} km</Text>
+                  {preferences.searchRadiusKm === radius && (
+                    <Ionicons name="checkmark" size={20} color={theme.COLORS.primary} />
+                  )}
+                </TouchableOpacity>
+              ))}
+            </Pressable>
+          </Pressable>
+        </Modal>
 
         {/* Liste Başlığı */}
         <View style={styles.sectionHeader}>
@@ -231,6 +289,11 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: theme.SIZES.m,
   },
+  modalBackdrop: { flex: 1, justifyContent: 'center', padding: theme.SIZES.l, backgroundColor: 'rgba(0,0,0,0.35)' },
+  filterModal: { alignSelf: 'center', width: '100%', maxWidth: 420, padding: theme.SIZES.l, backgroundColor: theme.COLORS.card, borderRadius: theme.SIZES.cardRadius },
+  filterTitle: { ...theme.FONTS.h3, color: theme.COLORS.text, marginBottom: theme.SIZES.m },
+  radiusOption: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', minHeight: 48, borderBottomWidth: 1, borderBottomColor: theme.COLORS.border },
+  radiusText: { ...theme.FONTS.body1, color: theme.COLORS.text },
 });
 
 export default HomeScreen;

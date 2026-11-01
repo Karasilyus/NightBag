@@ -94,6 +94,17 @@ export const authService = {
     }
   },
 
+  updateCurrentUser: async (updates: Record<string, unknown>) => {
+    const userJson = await AsyncStorage.getItem('currentUser');
+    if (!userJson) {
+      throw new Error('Düzenlenecek kullanıcı bulunamadı.');
+    }
+
+    const user = { ...JSON.parse(userJson), ...updates };
+    await AsyncStorage.setItem('currentUser', JSON.stringify(user));
+    return user;
+  },
+
   logout: async () => {
     await AsyncStorage.removeItem('currentUser');
   },

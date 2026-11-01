@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, Image } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, Image, Modal, Pressable, TextInput, Switch, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import theme from '../constants/theme';
 import { authService } from '../services/auth.service';
+import { preferencesService, UserPreferences } from '../services/preferences.service';
 
 const ProfileScreen = ({ navigation }: any) => {
   const [user, setUser] = useState({ 
@@ -11,19 +12,47 @@ const ProfileScreen = ({ navigation }: any) => {
     profileStats: { savedBags: 0, moneySaved: 0 },
     savedBusinesses: [] as any[]
   });
+  const [preferences, setPreferences] = useState<UserPreferences>({
+    searchRadiusKm: 5,
+    notificationsEnabled: true,
+    location: null,
+  });
+  const [activeModal, setActiveModal] = useState<'edit' | 'location' | 'privacy' | 'help' | null>(null);
+  const [editedName, setEditedName] = useState('');
+  const [isSavingName, setIsSavingName] = useState(false);
+  const [supportError, setSupportError] = useState('');
+  const [settingsError, setSettingsError] = useState('');
 
   useEffect(() => {
     const loadUser = async () => {
-      const currentUser = await authService.getCurrentUser();
-      if (currentUser) {
-        setUser(currentUser);
-      }
+      const [currentUser, currentPreferences, savedBags] = await Promise.all([
+        authService.getCurrentUser(),
+        preferencesService.getPreferences(),
+        preferencesService.getSavedBags(),
+      ]);
+      if (currentUser) setUser(currentUser);
+      setPreferences(currentPreferences);
+      setUser((previous) => ({
+        ...previous,
+        savedBusinesses: savedBags.map((bag) => ({
+          id: bag.id,
+          name: bag.name,
+          type: bag.type,
+          distance: bag.distance,
+          imageUrl: bag.imageUrl,
+        })),
+      }));
     };
 
-    const unsubscribe = navigation.addListener('focus', () => {
-      loadUser();
-    });
+    const refreshUser = () => {
+      loadUser().catch((error) => {
+        console.error('Profil bilgileri yüklenemedi:', error);
+        setSettingsError('Profil bilgileri yüklenemedi. Lütfen tekrar deneyin.');
+      });
+    };
 
+    refreshUser();
+    const unsubscribe = navigation.addListener('focus', refreshUser);
     return unsubscribe;
   }, [navigation]);
 
@@ -33,11 +62,70 @@ const ProfileScreen = ({ navigation }: any) => {
   };
 
   const getInitials = (name: string) => {
-    const words = name.trim().split(' ');
+    const words = name.trim().split(/\s+/).filter(Boolean);
+    if (words.length === 0) return 'NB';
     if (words.length >= 2) {
       return (words[0][0] + words[1][0]).toUpperCase();
     }
     return name.substring(0, 2).toUpperCase();
+  };
+
+  const saveName = async () => {
+    const fullName = editedName.trim();
+    if (!fullName) return;
+
+    setIsSavingName(true);
+    try {
+      const updatedUser = await authService.updateCurrentUser({ fullName });
+      setUser((previous) => ({ ...previous, ...updatedUser }));
+      setSettingsError('');
+      setActiveModal(null);
+    } catch (error) {
+      console.error('Profil adı kaydedilemedi:', error);
+      setSettingsError('Profil adı kaydedilemedi. Lütfen tekrar deneyin.');
+    } finally {
+      setIsSavingName(false);
+    }
+  };
+
+  const updateRadius = async (searchRadiusKm: number) => {
+    try {
+      const updatedPreferences = await preferencesService.updatePreferences({ searchRadiusKm });
+      setPreferences(updatedPreferences);
+      setSettingsError('');
+    } catch (error) {
+      console.error('Arama mesafesi kaydedilemedi:', error);
+      setSettingsError('Arama mesafesi kaydedilemedi. Lütfen tekrar deneyin.');
+    }
+  };
+
+  const openSupportEmail = async () => {
+    try {
+      await Linking.openURL('mailto:?subject=NightBag%20destek');
+    } catch (error) {
+      console.error('E-posta uygulaması açılamadı:', error);
+      setSupportError('E-posta uygulaması açılamadı. Lütfen cihazınızda bir e-posta uygulaması ayarlayın.');
+    }
+  };
+
+  const toggleSavedBag = async (bag: typeof user.savedBusinesses[number]) => {
+    try {
+      await preferencesService.toggleSavedBag({
+        id: bag.id,
+        name: bag.name,
+        type: bag.type,
+        distance: bag.distance,
+        imageUrl: bag.imageUrl,
+      });
+      setUser((previous) => ({
+        ...previous,
+        savedBusinesses: previous.savedBusinesses.filter((savedBag) => savedBag.id !== bag.id),
+      }));
+      setSettingsError('');
+    } catch (error) {
+      console.error('Kaydedilen çanta kaldırılamadı:', error);
+      setSettingsError('Kaydedilen çanta kaldırılamadı. Lütfen tekrar deneyin.');
+    }
   };
 
   return (
@@ -57,7 +145,13 @@ const ProfileScreen = ({ navigation }: any) => {
           </View>
           <View style={styles.userInfo}>
             <Text style={styles.userName}>{user.fullName}</Text>
-            <TouchableOpacity style={styles.editBtn}>
+            <TouchableOpacity
+              style={styles.editBtn}
+              onPress={() => {
+                setEditedName(user.fullName);
+                setActiveModal('edit');
+              }}
+            >
               <Text style={styles.editBtnText}>Profil bilgilerini düzenle</Text>
               <Ionicons name="pencil" size={12} color={theme.COLORS.primary} />
             </TouchableOpacity>
@@ -78,31 +172,46 @@ const ProfileScreen = ({ navigation }: any) => {
         </View>
 
         {/* Ayarlar Menüsü */}
+        {settingsError ? <Text style={styles.settingsError}>{settingsError}</Text> : null}
         <Text style={styles.sectionTitle}>Ayarlar</Text>
         <View style={styles.menuContainer}>
-          <TouchableOpacity style={styles.menuItem}>
+          <TouchableOpacity style={styles.menuItem} onPress={() => setActiveModal('location')}>
             <View style={styles.menuLeft}>
               <Ionicons name="location-outline" size={20} color={theme.COLORS.textSecondary} />
               <Text style={styles.menuText}>Konum ve adres alanı</Text>
             </View>
             <View style={styles.menuRight}>
-              <Text style={styles.menuValue}>5 km</Text>
+              <Text style={styles.menuValue}>{preferences.searchRadiusKm} km</Text>
               <Ionicons name="chevron-forward" size={16} color={theme.COLORS.textSecondary} />
             </View>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.menuItem}>
+          <View style={styles.menuItem}>
             <View style={styles.menuLeft}>
               <Ionicons name="notifications-outline" size={20} color={theme.COLORS.textSecondary} />
               <Text style={styles.menuText}>Bildirimler</Text>
             </View>
             <View style={styles.menuRight}>
-              <Text style={styles.menuValue}>Açık</Text>
-              <Ionicons name="chevron-forward" size={16} color={theme.COLORS.textSecondary} />
+              <Text style={styles.menuValue}>{preferences.notificationsEnabled ? 'Açık' : 'Kapalı'}</Text>
+              <Switch
+                value={preferences.notificationsEnabled}
+                onValueChange={async (notificationsEnabled) => {
+                  try {
+                    setPreferences(await preferencesService.updatePreferences({ notificationsEnabled }));
+                  } catch (error) {
+                    console.error('Bildirim tercihi kaydedilemedi:', error);
+                    setSettingsError('Bildirim tercihi kaydedilemedi. Lütfen tekrar deneyin.');
+                  }
+                }}
+                trackColor={{ false: theme.COLORS.border, true: theme.COLORS.tagBackground }}
+                thumbColor={preferences.notificationsEnabled ? theme.COLORS.primary : '#f4f3f4'}
+                accessibilityLabel="Bildirim tercihini değiştir"
+              />
             </View>
-          </TouchableOpacity>
+          </View>
+          <Text style={styles.preferenceNote}>Bildirim tercihi bu cihazda saklanır; bildirim gönderimi backend entegrasyonu gerektirir.</Text>
 
-          <TouchableOpacity style={styles.menuItem}>
+          <TouchableOpacity style={styles.menuItem} onPress={() => setActiveModal('privacy')}>
             <View style={styles.menuLeft}>
               <Ionicons name="shield-checkmark-outline" size={20} color={theme.COLORS.textSecondary} />
               <Text style={styles.menuText}>Hesap ve gizlilik</Text>
@@ -110,7 +219,10 @@ const ProfileScreen = ({ navigation }: any) => {
             <Ionicons name="chevron-forward" size={16} color={theme.COLORS.textSecondary} />
           </TouchableOpacity>
 
-          <TouchableOpacity style={[styles.menuItem, { borderBottomWidth: 0 }]}>
+          <TouchableOpacity style={[styles.menuItem, { borderBottomWidth: 0 }]} onPress={() => {
+            setSupportError('');
+            setActiveModal('help');
+          }}>
             <View style={styles.menuLeft}>
               <Ionicons name="help-circle-outline" size={20} color={theme.COLORS.textSecondary} />
               <Text style={styles.menuText}>Yardım ve destek</Text>
@@ -121,7 +233,7 @@ const ProfileScreen = ({ navigation }: any) => {
 
         {/* Kaydedilenler */}
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Kaydettiğin işletmeler</Text>
+          <Text style={styles.sectionTitle}>Kaydettiğin çantalar</Text>
           <Text style={styles.seeAllText}>Tümü - {user.savedBusinesses.length}</Text>
         </View>
 
@@ -132,12 +244,14 @@ const ProfileScreen = ({ navigation }: any) => {
               <Text style={styles.favName}>{biz.name}</Text>
               <Text style={styles.favDesc}>{biz.type} • {biz.distance}</Text>
             </View>
-            <Ionicons name="heart" size={24} color={theme.COLORS.primary} />
+            <TouchableOpacity onPress={() => toggleSavedBag(biz)} accessibilityRole="button" accessibilityLabel={`${biz.name} kaydını kaldır`}>
+              <Ionicons name="heart" size={24} color={theme.COLORS.primary} />
+            </TouchableOpacity>
           </View>
         ))}
 
         {user.savedBusinesses.length === 0 && (
-          <Text style={{ textAlign: 'center', color: theme.COLORS.textSecondary, marginBottom: theme.SIZES.m }}>Henüz işletme kaydetmedin.</Text>
+          <Text style={{ textAlign: 'center', color: theme.COLORS.textSecondary, marginBottom: theme.SIZES.m }}>Henüz çanta kaydetmedin.</Text>
         )}
 
         {/* İşletme Butonu */}
@@ -150,6 +264,78 @@ const ProfileScreen = ({ navigation }: any) => {
           <Ionicons name="arrow-forward" size={16} color={theme.COLORS.primary} style={{ marginLeft: 'auto' }} />
         </TouchableOpacity>
       </ScrollView>
+
+      <Modal visible={activeModal !== null} transparent animationType="fade" onRequestClose={() => setActiveModal(null)}>
+        <Pressable style={styles.modalBackdrop} onPress={() => setActiveModal(null)}>
+          <Pressable style={styles.modalCard} onPress={(event) => event.stopPropagation()}>
+            {activeModal === 'edit' && (
+              <>
+                <Text style={styles.modalTitle}>Profil bilgilerini düzenle</Text>
+                <TextInput
+                  style={styles.profileInput}
+                  value={editedName}
+                  onChangeText={setEditedName}
+                  placeholder="Ad Soyad"
+                  accessibilityLabel="Ad soyad"
+                />
+                <TouchableOpacity style={styles.modalPrimaryButton} onPress={saveName} disabled={isSavingName || !editedName.trim()}>
+                  <Text style={styles.modalPrimaryText}>{isSavingName ? 'Kaydediliyor...' : 'Kaydet'}</Text>
+                </TouchableOpacity>
+              </>
+            )}
+
+            {activeModal === 'location' && (
+              <>
+                <Text style={styles.modalTitle}>Konum ve arama alanı</Text>
+                <Text style={styles.modalDescription}>Yakınındaki çantaları hangi mesafede arayalım?</Text>
+                <View style={styles.radiusOptions}>
+                  {[2, 5, 10, 20].map((radius) => (
+                    <TouchableOpacity
+                      key={radius}
+                      style={[styles.radiusOption, preferences.searchRadiusKm === radius && styles.radiusOptionSelected]}
+                      onPress={() => updateRadius(radius)}
+                    >
+                      <Text style={[styles.radiusOptionText, preferences.searchRadiusKm === radius && styles.radiusOptionTextSelected]}>{radius} km</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                <Text style={styles.modalDescription}>
+                  Seçili konum: {preferences.location?.label || 'Kadıköy, İstanbul'}
+                </Text>
+                <TouchableOpacity style={styles.modalPrimaryButton} onPress={() => {
+                  setActiveModal(null);
+                  navigation.navigate('LocationPicker', { returnToProfile: true });
+                }}>
+                  <Text style={styles.modalPrimaryText}>Haritada konumu seç</Text>
+                </TouchableOpacity>
+              </>
+            )}
+
+            {activeModal === 'privacy' && (
+              <>
+                <Text style={styles.modalTitle}>Hesap ve gizlilik</Text>
+                <Text style={styles.modalDescription}>
+                  Profil adı ve uygulama tercihleri bu cihazda saklanır. Hesap silme, şifre sıfırlama ve sunucudaki kişisel verileri yönetme özellikleri backend desteği gerektirir ve henüz uygulamada sunulmuyor.
+                </Text>
+                <TouchableOpacity style={styles.modalPrimaryButton} onPress={() => setActiveModal(null)}>
+                  <Text style={styles.modalPrimaryText}>Anladım</Text>
+                </TouchableOpacity>
+              </>
+            )}
+
+            {activeModal === 'help' && (
+              <>
+                <Text style={styles.modalTitle}>Yardım ve destek</Text>
+                <Text style={styles.modalDescription}>Destek talebinizi e-posta uygulamanızdan iletebilirsiniz.</Text>
+                {supportError ? <Text style={styles.supportError}>{supportError}</Text> : null}
+                <TouchableOpacity style={styles.modalPrimaryButton} onPress={openSupportEmail}>
+                  <Text style={styles.modalPrimaryText}>E-posta oluştur</Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </Pressable>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -180,6 +366,21 @@ const styles = StyleSheet.create({
   menuText: { ...theme.FONTS.body2, color: theme.COLORS.text },
   menuRight: { flexDirection: 'row', alignItems: 'center', gap: theme.SIZES.s },
   menuValue: { ...theme.FONTS.caption, color: theme.COLORS.textSecondary },
+  preferenceNote: { ...theme.FONTS.caption, color: theme.COLORS.textSecondary, paddingBottom: theme.SIZES.m },
+  modalBackdrop: { flex: 1, justifyContent: 'center', padding: theme.SIZES.l, backgroundColor: 'rgba(0,0,0,0.35)' },
+  modalCard: { alignSelf: 'center', width: '100%', maxWidth: 440, padding: theme.SIZES.l, backgroundColor: theme.COLORS.card, borderRadius: theme.SIZES.cardRadius },
+  modalTitle: { ...theme.FONTS.h3, color: theme.COLORS.text, marginBottom: theme.SIZES.m },
+  modalDescription: { ...theme.FONTS.body2, color: theme.COLORS.textSecondary, lineHeight: 21, marginBottom: theme.SIZES.m },
+  profileInput: { height: 48, borderWidth: 1, borderColor: theme.COLORS.border, borderRadius: theme.SIZES.radius, paddingHorizontal: theme.SIZES.m, color: theme.COLORS.text, marginBottom: theme.SIZES.m },
+  modalPrimaryButton: { alignItems: 'center', justifyContent: 'center', minHeight: 48, paddingHorizontal: theme.SIZES.m, backgroundColor: theme.COLORS.primary, borderRadius: theme.SIZES.buttonRadius, marginTop: theme.SIZES.s },
+  modalPrimaryText: { ...theme.FONTS.body2, fontWeight: '600', color: theme.COLORS.card },
+  radiusOptions: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.SIZES.s, marginBottom: theme.SIZES.m },
+  radiusOption: { paddingHorizontal: theme.SIZES.m, paddingVertical: theme.SIZES.s, borderRadius: 18, borderWidth: 1, borderColor: theme.COLORS.border },
+  radiusOptionSelected: { backgroundColor: theme.COLORS.tagBackground, borderColor: theme.COLORS.primary },
+  radiusOptionText: { ...theme.FONTS.body2, color: theme.COLORS.text },
+  radiusOptionTextSelected: { color: theme.COLORS.primary, fontWeight: '600' },
+  supportError: { ...theme.FONTS.caption, color: theme.COLORS.error, marginBottom: theme.SIZES.s },
+  settingsError: { ...theme.FONTS.caption, color: theme.COLORS.error, marginBottom: theme.SIZES.s },
   favCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.COLORS.card, padding: theme.SIZES.m, borderRadius: theme.SIZES.radius, marginBottom: theme.SIZES.m, borderWidth: 1, borderColor: theme.COLORS.border },
   favImage: { width: 48, height: 48, borderRadius: 24 },
   favInfo: { flex: 1, marginLeft: theme.SIZES.m },

@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, Image } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, Image, Share, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import theme from '../constants/theme';
 
@@ -14,6 +14,17 @@ const OrderSuccessScreen = ({ route, navigation }: any) => {
   const price = reservation?.price || 125;
   const imageUrl = reservation?.imageUrl || 'https://images.unsplash.com/photo-1509440159596-0249088772ff?q=80&w=1000&auto=format&fit=crop';
 
+  const shareReservation = async () => {
+    try {
+      await Share.share({
+        message: `NightBag rezervasyonum: ${bagTitle} - ${businessName}. Teslim alma kodu: ${pickupCode}`,
+      });
+    } catch (error) {
+      console.error('Rezervasyon paylaşılamadı:', error);
+      Alert.alert('Paylaşım başarısız', 'Rezervasyon bilgileri paylaşılamadı.');
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       {/* Üst Bar */}
@@ -22,14 +33,14 @@ const OrderSuccessScreen = ({ route, navigation }: any) => {
           <Ionicons name="close" size={24} color={theme.COLORS.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Rezervasyonun</Text>
-        <TouchableOpacity style={styles.iconBtn}>
+        <TouchableOpacity style={styles.iconBtn} onPress={shareReservation} accessibilityRole="button" accessibilityLabel="Rezervasyonu paylaş">
           <Ionicons name="share-social-outline" size={24} color={theme.COLORS.text} />
         </TouchableOpacity>
       </View>
 
       <View style={styles.content}>
         <Text style={styles.title}>Çantan seni bekliyor!</Text>
-        <Text style={styles.subtitle}>{businessName}'ndaki çantan başarıyla ayrıldı.</Text>
+        <Text style={styles.subtitle}>{businessName} işletmesindeki çantan başarıyla ayrıldı.</Text>
 
         {/* Ana Yeşil Kart */}
         <View style={styles.successCard}>

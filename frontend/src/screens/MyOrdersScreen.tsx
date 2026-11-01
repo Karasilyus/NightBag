@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, Image, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, Image, ActivityIndicator, Modal, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import theme from '../constants/theme';
 import { reservationService } from '../services/reservation.service';
@@ -8,6 +8,10 @@ const MyOrdersScreen = () => {
   const [activeTab, setActiveTab] = useState('Tümü');
   const [reservations, setReservations] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [selectedCode, setSelectedCode] = useState<string | null>(null);
+  const [reservationToCancel, setReservationToCancel] = useState<any>(null);
+  const [isCancelling, setIsCancelling] = useState(false);
+  const [cancellationError, setCancellationError] = useState('');
 
   useEffect(() => {
     const fetchReservations = async () => {
@@ -23,6 +27,24 @@ const MyOrdersScreen = () => {
     };
     fetchReservations();
   }, [activeTab]);
+
+  const cancelReservation = async () => {
+    if (!reservationToCancel?.id) return;
+
+    setIsCancelling(true);
+    setCancellationError('');
+    try {
+      await reservationService.cancelReservation(reservationToCancel.id);
+      setReservationToCancel(null);
+      const response = await reservationService.getReservations(activeTab);
+      setReservations(response.data);
+    } catch (error) {
+      console.error('Rezervasyon iptal edilemedi:', error);
+      setCancellationError('Rezervasyon iptal edilemedi. Lütfen tekrar deneyin.');
+    } finally {
+      setIsCancelling(false);
+    }
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -68,11 +90,21 @@ const MyOrdersScreen = () => {
                   </View>
                   <View style={styles.cardFooter}>
                     <Text style={styles.codeText}>{item.code}</Text>
-                    <TouchableOpacity style={styles.codeBtn}>
+                    <TouchableOpacity style={styles.codeBtn} onPress={() => setSelectedCode(item.code)} accessibilityRole="button">
                       <Text style={styles.codeBtnText}>Kodu göster</Text>
                       <Ionicons name="qr-code-outline" size={16} color={theme.COLORS.card} />
                     </TouchableOpacity>
                   </View>
+                  <TouchableOpacity
+                    style={styles.cancelReservationBtn}
+                    onPress={() => {
+                      setCancellationError('');
+                      setReservationToCancel(item);
+                    }}
+                    accessibilityRole="button"
+                  >
+                    <Text style={styles.cancelReservationText}>Rezervasyonu iptal et</Text>
+                  </TouchableOpacity>
                 </View>
               );
             } else {
@@ -106,6 +138,45 @@ const MyOrdersScreen = () => {
           </View>
         )}
       </ScrollView>
+
+      <Modal visible={selectedCode !== null} transparent animationType="fade" onRequestClose={() => setSelectedCode(null)}>
+        <Pressable style={styles.modalBackdrop} onPress={() => setSelectedCode(null)}>
+          <Pressable style={styles.codeModal} onPress={(event) => event.stopPropagation()}>
+            <Text style={styles.modalTitle}>Teslim alma kodun</Text>
+            <Text style={styles.modalCode}>{selectedCode}</Text>
+            <Text style={styles.modalHint}>Bu kodu teslim alırken işletme görevlisine göster.</Text>
+            <TouchableOpacity style={styles.modalCloseButton} onPress={() => setSelectedCode(null)}>
+              <Text style={styles.modalCloseText}>Kapat</Text>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <Modal visible={reservationToCancel !== null} transparent animationType="fade" onRequestClose={() => setReservationToCancel(null)}>
+        <Pressable style={styles.modalBackdrop} onPress={() => setReservationToCancel(null)}>
+          <Pressable style={styles.codeModal} onPress={(event) => event.stopPropagation()}>
+            <Text style={styles.modalTitle}>Rezervasyonu iptal et?</Text>
+            <Text style={styles.modalHint}>{reservationToCancel?.bagTitle} rezervasyonu iptal edilecek.</Text>
+            {cancellationError ? <Text style={styles.cancellationError}>{cancellationError}</Text> : null}
+            <View style={styles.cancelActions}>
+              <TouchableOpacity
+                style={styles.cancelKeepButton}
+                onPress={() => setReservationToCancel(null)}
+                disabled={isCancelling}
+              >
+                <Text style={styles.cancelKeepText}>Vazgeç</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.cancelConfirmButton}
+                onPress={cancelReservation}
+                disabled={isCancelling}
+              >
+                <Text style={styles.cancelConfirmText}>{isCancelling ? 'İptal ediliyor...' : 'İptal et'}</Text>
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -124,6 +195,21 @@ const styles = StyleSheet.create({
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: theme.SIZES.m },
   sectionTitle: { ...theme.FONTS.h3, color: theme.COLORS.text },
   sectionCount: { ...theme.FONTS.caption, color: theme.COLORS.textSecondary },
+  modalBackdrop: { flex: 1, justifyContent: 'center', padding: theme.SIZES.l, backgroundColor: 'rgba(0,0,0,0.35)' },
+  codeModal: { alignSelf: 'center', width: '100%', maxWidth: 400, alignItems: 'center', padding: theme.SIZES.l, backgroundColor: theme.COLORS.card, borderRadius: theme.SIZES.cardRadius },
+  modalTitle: { ...theme.FONTS.h3, color: theme.COLORS.text, marginBottom: theme.SIZES.m },
+  modalCode: { ...theme.FONTS.h1, color: theme.COLORS.primary, letterSpacing: 2, marginBottom: theme.SIZES.s },
+  modalHint: { ...theme.FONTS.body2, color: theme.COLORS.textSecondary, textAlign: 'center', marginBottom: theme.SIZES.m },
+  modalCloseButton: { minWidth: 120, padding: theme.SIZES.s, alignItems: 'center', backgroundColor: theme.COLORS.primary, borderRadius: theme.SIZES.buttonRadius },
+  modalCloseText: { ...theme.FONTS.body2, fontWeight: '600', color: theme.COLORS.card },
+  cancelReservationBtn: { alignSelf: 'flex-end', paddingVertical: theme.SIZES.s, marginTop: theme.SIZES.xs },
+  cancelReservationText: { ...theme.FONTS.caption, color: theme.COLORS.error, fontWeight: '600' },
+  cancellationError: { ...theme.FONTS.caption, color: theme.COLORS.error, textAlign: 'center', marginBottom: theme.SIZES.s },
+  cancelActions: { flexDirection: 'row', width: '100%', gap: theme.SIZES.s },
+  cancelKeepButton: { flex: 1, minHeight: 44, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: theme.COLORS.border, borderRadius: theme.SIZES.buttonRadius },
+  cancelKeepText: { ...theme.FONTS.body2, color: theme.COLORS.text },
+  cancelConfirmButton: { flex: 1, minHeight: 44, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.COLORS.error, borderRadius: theme.SIZES.buttonRadius },
+  cancelConfirmText: { ...theme.FONTS.body2, color: theme.COLORS.card, fontWeight: '600' },
   activeCard: { backgroundColor: theme.COLORS.card, borderRadius: theme.SIZES.radius, padding: theme.SIZES.m, marginBottom: theme.SIZES.xl, borderWidth: 1, borderColor: theme.COLORS.primary },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: theme.SIZES.m },
   statusBadge: { backgroundColor: theme.COLORS.tagBackground, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },

@@ -1,23 +1,39 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
 
-const MapView: any = View;
-const Marker: any = View;
-
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import theme from '../constants/theme';
 import SurpriseBagCard from '../components/SurpriseBagCard';
 import { bagService } from '../services/bag.service';
+import WebMapCanvas from '../components/web/WebMapCanvas';
+import { preferencesService, UserPreferences } from '../services/preferences.service';
 
-const MapScreen = () => {
+const MapScreen = ({ navigation }: any) => {
   const [bags, setBags] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [preferences, setPreferences] = useState<UserPreferences>({
+    searchRadiusKm: 5,
+    notificationsEnabled: true,
+    location: null,
+  });
+
+  useEffect(() => {
+    preferencesService.getPreferences()
+      .then(setPreferences)
+      .catch((error) => console.error('Kullanıcı tercihleri yüklenemedi:', error));
+  }, []);
 
   useEffect(() => {
     const fetchBags = async () => {
       setIsLoading(true);
       try {
-        const response = await bagService.getBags();
+        const response = await bagService.getBags(
+          'Tümü',
+          '',
+          preferences.location?.latitude,
+          preferences.location?.longitude,
+          preferences.searchRadiusKm * 1000
+        );
         setBags(response.data);
       } catch (error) {
         console.error(error);
@@ -26,14 +42,21 @@ const MapScreen = () => {
       }
     };
     fetchBags();
-  }, []);
+  }, [preferences]);
 
   return (
     <View style={styles.container}>
-      <View style={[styles.map, { justifyContent: 'center', alignItems: 'center', backgroundColor: '#e0e0e0' }]}>
-        <Ionicons name="map-outline" size={48} color={theme.COLORS.textSecondary} />
-        <Text style={{ marginTop: 10, color: theme.COLORS.textSecondary }}>Harita Web'de Desteklenmiyor</Text>
-      </View>
+      <WebMapCanvas
+        style={styles.map}
+        center={preferences.location || undefined}
+        radiusKm={preferences.searchRadiusKm}
+        markers={bags.map((bag) => ({
+          id: bag.id,
+          coordinate: bag.coordinate,
+          label: `${bag.price} ₺`,
+          onPress: () => navigation.navigate('BagDetails', { bag }),
+        }))}
+      />
 
       {/* Üst Arama/Konum Başlığı (Absolute) */}
       <SafeAreaView style={styles.headerContainer}>
@@ -45,7 +68,7 @@ const MapScreen = () => {
               <Text style={styles.locationText}>Kadıköy, İstanbul</Text>
             </View>
           </View>
-          <TouchableOpacity style={styles.searchBtn}>
+          <TouchableOpacity style={styles.searchBtn} onPress={() => navigation.navigate('Discover')}>
             <Ionicons name="search" size={24} color={theme.COLORS.text} />
           </TouchableOpacity>
         </View>

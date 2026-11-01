@@ -24,3 +24,15 @@ interface:
 ```sh
 docker compose -f backend/docker-compose.yml up --build frontend
 ```
+
+The Expo frontend is shared by mobile and web; web-only components are under
+`frontend/src/components/web`. To export a static web build:
+
+```sh
+cd frontend
+npm run web:build
+```
+
+The export is written to `frontend/web-build`. Set `EXPO_PUBLIC_API_URL` before
+building when the API is not available at `http://localhost:8080/api/v1` (for
+example, in PowerShell: `$env:EXPO_PUBLIC_API_URL = "https://api.example.com/api/v1"`).

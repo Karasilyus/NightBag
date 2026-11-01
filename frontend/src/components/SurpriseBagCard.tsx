@@ -1,8 +1,9 @@
 import React from 'react';
-import { View, Text, StyleSheet, Image, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, Image, TouchableOpacity, Alert } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import theme from '../constants/theme';
+import { preferencesService } from '../services/preferences.service';
 
 interface SurpriseBagCardProps {
   id?: string;
@@ -30,6 +31,42 @@ const SurpriseBagCard: React.FC<SurpriseBagCardProps> = (props) => {
     isMapCard = false,
   } = props;
   const navigation = useNavigation<any>();
+  const [isSaved, setIsSaved] = React.useState(false);
+
+  React.useEffect(() => {
+    let isMounted = true;
+    preferencesService.getSavedBags()
+      .then((savedBags) => {
+        if (isMounted) setIsSaved(savedBags.some((bag) => bag.id === props.id));
+      })
+      .catch((error) => console.error('Kaydedilen çantalar yüklenemedi:', error));
+
+    return () => {
+      isMounted = false;
+    };
+  }, [props.id]);
+
+  const toggleFavorite = async (event: any) => {
+    event.stopPropagation();
+    if (!props.id) {
+      Alert.alert('Çanta kaydedilemedi', 'Bu çantanın kimliği bulunamadı.');
+      return;
+    }
+
+    try {
+      const saved = await preferencesService.toggleSavedBag({
+        id: props.id,
+        name: businessName,
+        type: bagType,
+        distance,
+        imageUrl,
+      });
+      setIsSaved(saved);
+    } catch (error) {
+      console.error('Çanta kaydedilemedi:', error);
+      Alert.alert('Hata', 'Çanta kaydedilirken bir sorun oluştu.');
+    }
+  };
 
   return (
     <TouchableOpacity 
@@ -47,8 +84,8 @@ const SurpriseBagCard: React.FC<SurpriseBagCardProps> = (props) => {
         </View>
 
         {/* Sağ Üst Favori Butonu */}
-        <TouchableOpacity style={styles.favoriteBtn}>
-          <Ionicons name="heart-outline" size={20} color={theme.COLORS.primary} />
+        <TouchableOpacity style={styles.favoriteBtn} onPress={toggleFavorite} accessibilityRole="button" accessibilityLabel={isSaved ? 'Kaydedilenlerden çıkar' : 'Çantayı kaydet'}>
+            <Ionicons name={isSaved ? 'heart' : 'heart-outline'} size={20} color={theme.COLORS.primary} />
         </TouchableOpacity>
       </View>
 
@@ -67,10 +104,10 @@ const SurpriseBagCard: React.FC<SurpriseBagCardProps> = (props) => {
         </View>
         
         {isMapCard && (
-          <TouchableOpacity style={styles.reserveBtn}>
+          <View style={styles.reserveBtn} pointerEvents="none">
             <Text style={styles.reserveBtnText}>Çantayı İncele</Text>
             <Ionicons name="arrow-forward" size={16} color={theme.COLORS.card} />
-          </TouchableOpacity>
+          </View>
         )}
       </View>
     </TouchableOpacity>

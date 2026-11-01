@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, TextInput, KeyboardAvoidingView, Platform, ScrollView, ActivityIndicator, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import theme from '../constants/theme';
 import { authService } from '../services/auth.service';
 
@@ -28,17 +27,6 @@ const AuthScreen = ({ navigation }: any) => {
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const handleGoogleAuth = async () => {
-    setIsLoading(true);
-    // Google ile girişte şifre kontrolüne gerek yok, 1 saniye bekleyip başarılı sayıyoruz.
-    setTimeout(async () => {
-      const googleUser = { fullName: 'Google Kullanıcısı', email: 'kullanici@gmail.com' };
-      await AsyncStorage.setItem('currentUser', JSON.stringify(googleUser));
-      setIsLoading(false);
-      navigation.replace('MainFlow');
-    }, 1500);
   };
 
   return (
@@ -102,7 +90,10 @@ const AuthScreen = ({ navigation }: any) => {
             </View>
 
             {isLogin && (
-              <TouchableOpacity style={styles.forgotPasswordBtn}>
+              <TouchableOpacity
+                style={styles.forgotPasswordBtn}
+                onPress={() => Alert.alert('Şifremi unuttum', 'Şifre sıfırlama için backend kimlik doğrulama uç noktası gereklidir.')}
+              >
                 <Text style={styles.forgotPasswordText}>Şifremi unuttum</Text>
               </TouchableOpacity>
             )}
@@ -130,7 +121,7 @@ const AuthScreen = ({ navigation }: any) => {
           {/* Google ile Giriş */}
           <TouchableOpacity 
             style={styles.googleBtn} 
-            onPress={handleGoogleAuth}
+            onPress={() => Alert.alert('Google ile giriş', 'Google ile giriş, kimlik doğrulama backend entegrasyonu tamamlandığında etkinleştirilecek.')}
             disabled={isLoading}
           >
             <Ionicons name="logo-google" size={20} color={theme.COLORS.text} />

@@ -56,6 +56,9 @@ function MainTabNavigator() {
         tabBarStyle: {
           backgroundColor: COLORS.card,
           borderTopColor: COLORS.border,
+          width: '100%',
+          maxWidth: 900,
+          alignSelf: 'center',
         },
       }}
     >
@@ -77,6 +80,9 @@ function BusinessTabNavigator() {
         tabBarStyle: {
           backgroundColor: COLORS.card,
           borderTopColor: COLORS.border,
+          width: '100%',
+          maxWidth: 900,
+          alignSelf: 'center',
         },
       }}
     >

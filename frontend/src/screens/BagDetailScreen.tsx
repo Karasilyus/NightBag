@@ -1,10 +1,35 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, SafeAreaView, ActivityIndicator } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, SafeAreaView, ActivityIndicator, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import theme from '../constants/theme';
+import { preferencesService } from '../services/preferences.service';
 
 const BagDetailScreen = ({ route, navigation }: any) => {
   const bag = route.params?.bag;
+  const [isSaved, setIsSaved] = useState(false);
+
+  useEffect(() => {
+    if (!bag?.id) return;
+    preferencesService.getSavedBags()
+      .then((savedBags) => setIsSaved(savedBags.some((savedBag) => savedBag.id === bag.id)))
+      .catch((error) => console.error('Kaydedilen çantalar yüklenemedi:', error));
+  }, [bag?.id]);
+
+  const toggleFavorite = async () => {
+    if (!bag?.id) return;
+    try {
+      setIsSaved(await preferencesService.toggleSavedBag({
+        id: bag.id,
+        name: bag.businessName,
+        type: bag.bagType,
+        distance: bag.distance,
+        imageUrl: bag.imageUrl,
+      }));
+    } catch (error) {
+      console.error('Çanta kaydedilemedi:', error);
+      Alert.alert('Hata', 'Çanta kaydedilirken bir sorun oluştu.');
+    }
+  };
 
   if (!bag) {
     return (
@@ -22,8 +47,8 @@ const BagDetailScreen = ({ route, navigation }: any) => {
           <Ionicons name="arrow-back" size={24} color={theme.COLORS.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Çanta detayları</Text>
-        <TouchableOpacity style={styles.iconBtn}>
-          <Ionicons name="heart-outline" size={24} color={theme.COLORS.text} />
+        <TouchableOpacity style={styles.iconBtn} onPress={toggleFavorite} accessibilityRole="button" accessibilityLabel={isSaved ? 'Kaydedilenlerden çıkar' : 'Çantayı kaydet'}>
+          <Ionicons name={isSaved ? 'heart' : 'heart-outline'} size={24} color={theme.COLORS.primary} />
         </TouchableOpacity>
       </View>
 

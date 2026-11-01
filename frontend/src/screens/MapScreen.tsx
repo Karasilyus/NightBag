@@ -5,16 +5,34 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import theme from '../constants/theme';
 import SurpriseBagCard from '../components/SurpriseBagCard';
 import { bagService } from '../services/bag.service';
+import { preferencesService, UserPreferences } from '../services/preferences.service';
 
-const MapScreen = () => {
+const MapScreen = ({ navigation }: any) => {
   const [bags, setBags] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [preferences, setPreferences] = useState<UserPreferences>({
+    searchRadiusKm: 5,
+    notificationsEnabled: true,
+    location: null,
+  });
+
+  useEffect(() => {
+    preferencesService.getPreferences()
+      .then(setPreferences)
+      .catch((error) => console.error('Kullanıcı tercihleri yüklenemedi:', error));
+  }, []);
 
   useEffect(() => {
     const fetchBags = async () => {
       setIsLoading(true);
       try {
-        const response = await bagService.getBags();
+        const response = await bagService.getBags(
+          'Tümü',
+          '',
+          preferences.location?.latitude,
+          preferences.location?.longitude,
+          preferences.searchRadiusKm * 1000
+        );
         setBags(response.data);
       } catch (error) {
         console.error(error);
@@ -23,17 +41,17 @@ const MapScreen = () => {
       }
     };
     fetchBags();
-  }, []);
+  }, [preferences]);
 
   return (
     <View style={styles.container}>
       <MapView
         style={styles.map}
         initialRegion={{
-          latitude: 40.9845,
-          longitude: 29.0260,
-          latitudeDelta: 0.01,
-          longitudeDelta: 0.01,
+          latitude: preferences.location?.latitude ?? 40.9845,
+          longitude: preferences.location?.longitude ?? 29.0260,
+          latitudeDelta: preferences.searchRadiusKm / 55,
+          longitudeDelta: preferences.searchRadiusKm / 55,
         }}
       >
         {!isLoading && bags.map((item) => (
@@ -58,7 +76,7 @@ const MapScreen = () => {
               <Text style={styles.locationText}>Kadıköy, İstanbul</Text>
             </View>
           </View>
-          <TouchableOpacity style={styles.searchBtn}>
+          <TouchableOpacity style={styles.searchBtn} onPress={() => navigation.navigate('Discover')}>
             <Ionicons name="search" size={24} color={theme.COLORS.text} />
           </TouchableOpacity>
         </View>

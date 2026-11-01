@@ -23,8 +23,9 @@ const BusinessDashboardScreen = ({ navigation }: any) => {
   };
 
   useEffect(() => {
-    fetchData();
-  }, []);
+    const unsubscribe = navigation.addListener('focus', fetchData);
+    return unsubscribe;
+  }, [navigation]);
 
   const handleVerifyCode = async () => {
     const code = searchCode.trim().toUpperCase();
@@ -118,7 +119,7 @@ const BusinessDashboardScreen = ({ navigation }: any) => {
               </View>
             </View>
             <Text style={styles.bagHelper}>
-              {data.stats.published} çantadan {data.stats.sold}'i satıldı • {data.stats.remaining} çanta beklemede.
+              Satılan çanta: {data.stats.sold} / {data.stats.published} • Kalan: {data.stats.remaining}.
             </Text>
           </>
         ) : (
@@ -197,7 +198,7 @@ const BusinessDashboardScreen = ({ navigation }: any) => {
               <Ionicons name="qr-code-outline" size={28} color={theme.COLORS.primary} />
               <Text style={styles.emptyOrdersTitle}>Hızlı Teslimat Doğrulama</Text>
               <Text style={styles.emptyOrdersDesc}>
-                Müşteri geldiğinde uygulamasında görünen 8 haneli kodu (örn: NB-482615) yukarıdaki kutuya girip "Teslim Et" butonuna basarak teslimatı onaylayabilirsiniz.
+                Müşteri geldiğinde uygulamasında görünen 8 haneli kodu (örn: NB-482615) yukarıdaki kutuya girip Teslim Et butonuna basarak teslimatı onaylayabilirsiniz.
               </Text>
             </View>
           )}

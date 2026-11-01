@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, Image, TouchableOpacity, SafeAreaView, ScrollVi
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import theme from '../constants/theme';
+import { preferencesService } from '../services/preferences.service';
 
 const WelcomeScreen = ({ navigation }: any) => {
   const [isLoadingLocation, setIsLoadingLocation] = useState(false);
@@ -17,10 +18,20 @@ const WelcomeScreen = ({ navigation }: any) => {
         return;
       }
 
-      let location = await Location.getCurrentPositionAsync({});
-      // Konum başarıyla alındı, normalde burada Context veya Redux'a kaydedilir
+      const location = await Location.getCurrentPositionAsync({});
+      if (!Number.isFinite(location.coords.latitude) || !Number.isFinite(location.coords.longitude)) {
+        throw new Error('Konum koordinatları alınamadı.');
+      }
+      await preferencesService.updatePreferences({
+        location: {
+          latitude: location.coords.latitude,
+          longitude: location.coords.longitude,
+          label: `${location.coords.latitude.toFixed(4)}, ${location.coords.longitude.toFixed(4)}`,
+        },
+      });
       navigation.replace('MainFlow');
     } catch (error) {
+      console.error('Konum alınamadı:', error);
       Alert.alert('Hata', 'Konum alınırken bir sorun oluştu.');
     } finally {
       setIsLoadingLocation(false);

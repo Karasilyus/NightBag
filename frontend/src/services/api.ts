@@ -5,6 +5,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 // Android emülatör 10.0.2.2, iOS simülatör / web localhost kullanır.
 // Gerçek cihazda bilgisayarınızın LAN IP'sini yazın.
 const getBaseUrl = () => {
+  const configuredBaseUrl = process.env.EXPO_PUBLIC_API_URL?.trim();
+  if (configuredBaseUrl) return configuredBaseUrl.replace(/\/+$/, '');
+
   if (Platform.OS === 'android') {
     return 'http://10.0.2.2:8080/api/v1';
   }
