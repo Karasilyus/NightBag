@@ -36,3 +36,9 @@ npm run web:build
 The export is written to `frontend/web-build`. Set `EXPO_PUBLIC_API_URL` before
 building when the API is not available at `http://localhost:8080/api/v1` (for
 example, in PowerShell: `$env:EXPO_PUBLIC_API_URL = "https://api.example.com/api/v1"`).
+
+The web map uses the Google Maps JavaScript API. Create `frontend/.env.local`
+with `EXPO_PUBLIC_GOOGLE_MAPS_API_KEY=your-key` to enable it locally. Enable the
+Maps JavaScript API in Google Cloud and restrict the key to your development
+and production website referrers. This key is included in the web bundle, so
+never commit an unrestricted key or put a server-side key here.

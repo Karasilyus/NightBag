@@ -18,10 +18,15 @@ const MapScreen = ({ navigation }: any) => {
   });
 
   useEffect(() => {
-    preferencesService.getPreferences()
-      .then(setPreferences)
-      .catch((error) => console.error('Kullanıcı tercihleri yüklenemedi:', error));
-  }, []);
+    const loadPreferences = () => {
+      preferencesService.getPreferences()
+        .then(setPreferences)
+        .catch((error) => console.error('Kullanıcı tercihleri yüklenemedi:', error));
+    };
+
+    loadPreferences();
+    return navigation.addListener('focus', loadPreferences);
+  }, [navigation]);
 
   useEffect(() => {
     const fetchBags = async () => {
@@ -63,10 +68,14 @@ const MapScreen = ({ navigation }: any) => {
         <View style={styles.header}>
           <View>
             <Text style={styles.headerTitle}>Haritada keşfet</Text>
-            <View style={styles.locationSelector}>
+            <TouchableOpacity
+              style={styles.locationSelector}
+              onPress={() => navigation.navigate('LocationPicker', { returnToMap: true })}
+              accessibilityRole="button"
+            >
               <Ionicons name="location-sharp" size={14} color={theme.COLORS.primary} />
-              <Text style={styles.locationText}>Kadıköy, İstanbul</Text>
-            </View>
+              <Text style={styles.locationText}>{preferences.location?.label || 'Kadıköy, İstanbul'}</Text>
+            </TouchableOpacity>
           </View>
           <TouchableOpacity style={styles.searchBtn} onPress={() => navigation.navigate('Discover')}>
             <Ionicons name="search" size={24} color={theme.COLORS.text} />

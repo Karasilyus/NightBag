@@ -9,6 +9,8 @@ const ProfileScreen = ({ navigation }: any) => {
   const [user, setUser] = useState({ 
     fullName: 'Misafir', 
     email: '',
+    role: '',
+    business_id: '',
     profileStats: { savedBags: 0, moneySaved: 0 },
     savedBusinesses: [] as any[]
   });
@@ -22,6 +24,9 @@ const ProfileScreen = ({ navigation }: any) => {
   const [isSavingName, setIsSavingName] = useState(false);
   const [supportError, setSupportError] = useState('');
   const [settingsError, setSettingsError] = useState('');
+  const canAccessBusinessPanel = user.role === 'business_owner'
+    && Boolean(user.business_id)
+    && Boolean(user.email.trim());
 
   useEffect(() => {
     const loadUser = async () => {
@@ -254,15 +259,17 @@ const ProfileScreen = ({ navigation }: any) => {
           <Text style={{ textAlign: 'center', color: theme.COLORS.textSecondary, marginBottom: theme.SIZES.m }}>Henüz çanta kaydetmedin.</Text>
         )}
 
-        {/* İşletme Butonu */}
-        <TouchableOpacity
-          style={styles.businessSwitchBtn}
-          onPress={() => navigation.navigate('BusinessFlow')}
-        >
-          <Ionicons name="storefront-outline" size={20} color={theme.COLORS.primary} />
-          <Text style={styles.businessSwitchText}>İşletme paneline geç</Text>
-          <Ionicons name="arrow-forward" size={16} color={theme.COLORS.primary} style={{ marginLeft: 'auto' }} />
-        </TouchableOpacity>
+        {canAccessBusinessPanel && (
+          <TouchableOpacity
+            style={styles.businessSwitchBtn}
+            onPress={() => navigation.navigate('BusinessFlow')}
+            accessibilityRole="button"
+          >
+            <Ionicons name="storefront-outline" size={20} color={theme.COLORS.primary} />
+            <Text style={styles.businessSwitchText}>İşletme paneline geç</Text>
+            <Ionicons name="arrow-forward" size={16} color={theme.COLORS.primary} style={{ marginLeft: 'auto' }} />
+          </TouchableOpacity>
+        )}
       </ScrollView>
 
       <Modal visible={activeModal !== null} transparent animationType="fade" onRequestClose={() => setActiveModal(null)}>

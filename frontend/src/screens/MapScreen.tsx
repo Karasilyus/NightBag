@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
 import MapView, { Marker } from 'react-native-maps';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -8,6 +8,7 @@ import { bagService } from '../services/bag.service';
 import { preferencesService, UserPreferences } from '../services/preferences.service';
 
 const MapScreen = ({ navigation }: any) => {
+  const mapRef = useRef<MapView>(null);
   const [bags, setBags] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [preferences, setPreferences] = useState<UserPreferences>({
@@ -17,10 +18,25 @@ const MapScreen = ({ navigation }: any) => {
   });
 
   useEffect(() => {
-    preferencesService.getPreferences()
-      .then(setPreferences)
-      .catch((error) => console.error('Kullanıcı tercihleri yüklenemedi:', error));
-  }, []);
+    const loadPreferences = () => {
+      preferencesService.getPreferences()
+        .then(setPreferences)
+        .catch((error) => console.error('Kullanıcı tercihleri yüklenemedi:', error));
+    };
+
+    loadPreferences();
+    return navigation.addListener('focus', loadPreferences);
+  }, [navigation]);
+
+  useEffect(() => {
+    if (!preferences.location) return;
+    mapRef.current?.animateToRegion({
+      latitude: preferences.location.latitude,
+      longitude: preferences.location.longitude,
+      latitudeDelta: preferences.searchRadiusKm / 55,
+      longitudeDelta: preferences.searchRadiusKm / 55,
+    }, 350);
+  }, [preferences.location?.latitude, preferences.location?.longitude, preferences.searchRadiusKm]);
 
   useEffect(() => {
     const fetchBags = async () => {
@@ -46,6 +62,7 @@ const MapScreen = ({ navigation }: any) => {
   return (
     <View style={styles.container}>
       <MapView
+        ref={mapRef}
         style={styles.map}
         initialRegion={{
           latitude: preferences.location?.latitude ?? 40.9845,
@@ -71,10 +88,14 @@ const MapScreen = ({ navigation }: any) => {
         <View style={styles.header}>
           <View>
             <Text style={styles.headerTitle}>Haritada keşfet</Text>
-            <View style={styles.locationSelector}>
+            <TouchableOpacity
+              style={styles.locationSelector}
+              onPress={() => navigation.navigate('LocationPicker', { returnToMap: true })}
+              accessibilityRole="button"
+            >
               <Ionicons name="location-sharp" size={14} color={theme.COLORS.primary} />
-              <Text style={styles.locationText}>Kadıköy, İstanbul</Text>
-            </View>
+              <Text style={styles.locationText}>{preferences.location?.label || 'Kadıköy, İstanbul'}</Text>
+            </TouchableOpacity>
           </View>
           <TouchableOpacity style={styles.searchBtn} onPress={() => navigation.navigate('Discover')}>
             <Ionicons name="search" size={24} color={theme.COLORS.text} />

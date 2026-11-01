@@ -22,23 +22,11 @@ export const apiClient = axios.create({
   timeout: 15000,
 });
 
-// Request Interceptor: Her istekten önce X-User-ID başlığını ekler.
-// Backend geçici olarak bu başlığı bekliyor.
+// Add the authenticated user's bearer token when one is available.
 apiClient.interceptors.request.use(
   async (config) => {
-    try {
-      const userJson = await AsyncStorage.getItem('currentUser');
-      if (userJson) {
-        const user = JSON.parse(userJson);
-        const userId = user?.owner_id || user?.id || '11111111-1111-1111-1111-111111111111';
-        config.headers['X-User-ID'] = userId;
-      } else {
-        // Oturum açılmamışsa backend seed müşterisi ID'si (11111111-1111-1111-1111-111111111111) kullanılır
-        config.headers['X-User-ID'] = '11111111-1111-1111-1111-111111111111';
-      }
-    } catch {
-      config.headers['X-User-ID'] = '11111111-1111-1111-1111-111111111111';
-    }
+    const token = await AsyncStorage.getItem('authToken');
+    if (token) config.headers.Authorization = `Bearer ${token}`;
     return config;
   },
   (error) => {
@@ -49,10 +37,9 @@ apiClient.interceptors.request.use(
 // Response Interceptor: Global hata yönetimi.
 apiClient.interceptors.response.use(
   (response) => response,
-  (error) => {
+  async (error) => {
     if (error.response?.status === 401) {
-      // Oturum süresi dolmuş, kullanıcıyı çıkış yaptır
-      AsyncStorage.removeItem('currentUser');
+      await AsyncStorage.multiRemove(['currentUser', 'authToken']);
     }
     return Promise.reject(error);
   }

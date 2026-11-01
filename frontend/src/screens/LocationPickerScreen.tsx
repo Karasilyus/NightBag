@@ -40,7 +40,7 @@ const LocationPickerScreen = ({ navigation, route }: any) => {
           label: `${selectedCoordinate.latitude.toFixed(4)}, ${selectedCoordinate.longitude.toFixed(4)}`,
         },
       });
-      if (route?.params?.returnToProfile) {
+      if (route?.params?.returnToProfile || route?.params?.returnToMap) {
         navigation.goBack();
       } else {
         navigation.replace('MainFlow');
