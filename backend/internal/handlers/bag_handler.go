@@ -52,10 +52,7 @@ func (h *BagHandler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v1/business/pickups", h.auth(h.completePickup))
 }
 
-// ---------- yardımcılar ----------
 
-// auth: Authorization: Bearer <token> başlığını doğrular.
-// ALLOW_USER_ID_HEADER=true ise (sadece geliştirme) eski X-User-ID başlığı da kabul edilir.
 func (h *BagHandler) auth(next func(http.ResponseWriter, *http.Request, string)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		uid, ok := h.authSvc.UserID(r)
@@ -133,7 +130,6 @@ func pathUUID(w http.ResponseWriter, r *http.Request, name string) (string, bool
 
 // ---------- herkese açık ----------
 
-// GET /api/v1/listings/nearby?lat=40.98&lon=29.02&radius=5000&category=firin&q=moda&limit=50
 func (h *BagHandler) nearby(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 
@@ -174,7 +170,6 @@ func (h *BagHandler) getListing(w http.ResponseWriter, r *http.Request) {
 
 // ---------- müşteri ----------
 
-// POST /api/v1/listings/{id}/reserve   gövde: {"quantity": 1}
 func (h *BagHandler) reserve(w http.ResponseWriter, r *http.Request, userID string) {
 	listingID, ok := pathUUID(w, r, "id")
 	if !ok {
@@ -198,7 +193,6 @@ func (h *BagHandler) reserve(w http.ResponseWriter, r *http.Request, userID stri
 	writeJSON(w, http.StatusCreated, res)
 }
 
-// GET /api/v1/reservations?status=all|active|past
 func (h *BagHandler) listReservations(w http.ResponseWriter, r *http.Request, userID string) {
 	items, err := h.svc.ListReservations(r.Context(), userID, domain.ReservationScope(r.URL.Query().Get("status")))
 	if err != nil {
@@ -237,7 +231,6 @@ type createListingRequest struct {
 	PhotoURL      *string  `json:"photo_url"`
 }
 
-// POST /api/v1/business/{businessID}/listings
 func (h *BagHandler) createListing(w http.ResponseWriter, r *http.Request, ownerID string) {
 	businessID, ok := pathUUID(w, r, "businessID")
 	if !ok {
@@ -280,7 +273,6 @@ func (h *BagHandler) overview(w http.ResponseWriter, r *http.Request, ownerID st
 	writeJSON(w, http.StatusOK, o)
 }
 
-// POST /api/v1/business/pickups   gövde: {"code": "NB-482615"}
 func (h *BagHandler) completePickup(w http.ResponseWriter, r *http.Request, ownerID string) {
 	var req struct {
 		Code string `json:"code"`
@@ -330,7 +322,7 @@ func (h *BagHandler) removeFavorite(w http.ResponseWriter, r *http.Request, user
 }
 
 func (h *BagHandler) getMe(w http.ResponseWriter, r *http.Request, userID string) {
-	u, err := h.svc.GetUser(r.Context(), userID)
+	u, err := h.authSvc.GetAuthUser(r.Context(), userID)
 	if err != nil {
 		writeError(w, err)
 		return

@@ -124,7 +124,9 @@ func (r *BagRepository) CreateListing(ctx context.Context, in domain.CreateListi
 		$8::numeric, $9::numeric, $10::int, $10::int,
 		$11::date, $12::time, $13::time, $14::text, 'published'::listing_status, now()
 	FROM businesses b
-	WHERE b.id = $1 AND b.owner_id = $2 AND b.is_active
+	WHERE b.owner_id = $2 AND b.is_active
+	ORDER BY (b.id = $1::uuid) DESC, b.created_at
+	LIMIT 1
 	RETURNING id::text`
 
 	var id string
@@ -134,7 +136,7 @@ func (r *BagRepository) CreateListing(ctx context.Context, in domain.CreateListi
 		in.PickupDate, in.PickupStart, in.PickupEnd, in.PhotoURL,
 	).Scan(&id)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, domain.ErrForbidden // işletme yok ya da sahibi bu kullanıcı değil
+		return nil, domain.ErrForbidden 
 	}
 	if err != nil {
 		return nil, err
@@ -179,7 +181,6 @@ func isForeignKeyViolation(err error) bool {
 	return errors.As(err, &pgErr) && pgErr.Code == "23503"
 }
 
-// Reserve: stok kilidi + kod üretimi + stok düşümü tek transaction içinde.
 func (r *BagRepository) Reserve(ctx context.Context, userID, listingID string, qty int) (*domain.Reservation, error) {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
@@ -221,7 +222,6 @@ func (r *BagRepository) Reserve(ctx context.Context, userID, listingID string, q
 		return nil, domain.ErrInsufficientStock
 	}
 
-	// NB-#### kodu: bekleyen rezervasyonlar arasında benzersiz olana kadar dene.
 	var resID string
 	for attempt := 0; attempt < 20; attempt++ {
 		code, cerr := newPickupCode()
@@ -298,7 +298,7 @@ func (r *BagRepository) CancelReservation(ctx context.Context, userID, reservati
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback(ctx) //nolint:errcheck
+	defer tx.Rollback(ctx) 
 
 	var (
 		listingID, status string
@@ -339,7 +339,6 @@ func (r *BagRepository) CancelReservation(ctx context.Context, userID, reservati
 	return tx.Commit(ctx)
 }
 
-// CompletePickup: işletme sahibi, müşterinin kodunu girerek teslimi tamamlar.
 func (r *BagRepository) CompletePickup(ctx context.Context, ownerID, code string) (*domain.Reservation, error) {
 	var id string
 	err := r.pool.QueryRow(ctx, `

@@ -18,13 +18,12 @@ func isUniqueViolation(err error) bool {
 	return errors.As(err, &pgErr) && pgErr.Code == "23505"
 }
 
-// CreateAccount: kullanıcıyı (ve işletme sahibiyse işletmesini) tek transaction'da oluşturur.
 func (r *BagRepository) CreateAccount(ctx context.Context, in domain.RegisterInput, passwordHash string) (*domain.AuthUser, error) {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
 		return nil, err
 	}
-	defer tx.Rollback(ctx) //nolint:errcheck
+	defer tx.Rollback(ctx) 
 
 	var u domain.AuthUser
 	err = tx.QueryRow(ctx, `
@@ -62,7 +61,6 @@ func (r *BagRepository) CreateAccount(ctx context.Context, in domain.RegisterInp
 	return &u, nil
 }
 
-// GetCredentials: e-postaya göre kullanıcıyı, şifre hash'ini ve (varsa) işletme ID'sini döndürür.
 func (r *BagRepository) GetCredentials(ctx context.Context, email string) (*domain.AuthUser, string, error) {
 	var u domain.AuthUser
 	var hash string
@@ -106,4 +104,22 @@ func (r *BagRepository) SetPasswordIfEmpty(ctx context.Context, email, passwordH
 		`UPDATE users SET password_hash = $2 WHERE lower(email) = lower($1) AND password_hash IS NULL`,
 		strings.TrimSpace(email), passwordHash)
 	return err
+}
+
+func (r *BagRepository) GetAuthUser(ctx context.Context, id string) (*domain.AuthUser, error) {
+	var u domain.AuthUser
+	err := r.pool.QueryRow(ctx, `
+		SELECT u.id::text, u.full_name, u.email, u.role::text,
+		       (SELECT b.id::text FROM businesses b
+		         WHERE b.owner_id = u.id AND b.is_active
+		         ORDER BY b.created_at LIMIT 1)
+		FROM users u WHERE u.id = $1`, id,
+	).Scan(&u.ID, &u.FullName, &u.Email, &u.Role, &u.BusinessID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, domain.ErrUserNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &u, nil
 }

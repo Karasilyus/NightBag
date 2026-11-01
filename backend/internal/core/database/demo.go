@@ -6,8 +6,6 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// EnsureDemoListing: seed işletmesi (Moda Fırını) için bugüne ait ilan yoksa yenisini ekler,
-// böylece demo sırasında liste boş kalmaz. Sadece DEMO_DATA=true iken çağrılır.
 func EnsureDemoListing(ctx context.Context, pool *pgxpool.Pool) error {
 	_, err := pool.Exec(ctx, `
 		INSERT INTO bag_listings (business_id, title, category, original_value, price,

@@ -209,6 +209,10 @@ func (s *AuthService) Login(ctx context.Context, email, password string) (*domai
 	return &domain.AuthResult{Token: s.issueToken(u.ID), User: *u}, nil
 }
 
+func (s *AuthService) GetAuthUser(ctx context.Context, id string) (*domain.AuthUser, error) {
+	return s.repo.GetAuthUser(ctx, id)
+}
+
 func (s *AuthService) MyBusiness(ctx context.Context, ownerID string) (*domain.Business, error) {
 	return s.repo.GetBusinessByOwner(ctx, ownerID)
 }

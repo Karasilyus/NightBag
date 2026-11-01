@@ -19,7 +19,6 @@ func (c BagCategory) Valid() bool {
 	return false
 }
 
-// Listing: sürpriz çanta ilanı + işletme bilgisi (liste, harita ve detay ekranları).
 type Listing struct {
 	ID                string      `json:"id"`
 	BusinessID        string      `json:"business_id"`

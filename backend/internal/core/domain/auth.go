@@ -7,7 +7,6 @@ const (
 	RoleBusinessOwner = "business_owner"
 )
 
-// BusinessInput: işletme sahibi kaydolurken gönderilen işletme bilgisi.
 type BusinessInput struct {
 	Name     string      `json:"name"`
 	Category BagCategory `json:"category"`
@@ -25,7 +24,6 @@ type RegisterInput struct {
 	Business *BusinessInput
 }
 
-// AuthUser: giriş yapmış kullanıcı; işletme sahibiyse business_id de döner.
 type AuthUser struct {
 	User
 	BusinessID *string `json:"business_id,omitempty"`
@@ -54,5 +52,6 @@ type AuthRepository interface {
 	CreateAccount(ctx context.Context, in RegisterInput, passwordHash string) (*AuthUser, error)
 	GetCredentials(ctx context.Context, email string) (*AuthUser, string, error)
 	GetBusinessByOwner(ctx context.Context, ownerID string) (*Business, error)
+	GetAuthUser(ctx context.Context, id string) (*AuthUser, error)
 	SetPasswordIfEmpty(ctx context.Context, email, passwordHash string) error
 }
