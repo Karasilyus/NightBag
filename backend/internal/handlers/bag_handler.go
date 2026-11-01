@@ -98,7 +98,7 @@ func writeError(w http.ResponseWriter, err error) {
 		status, msg = http.StatusNotFound, err.Error()
 	case errors.Is(err, domain.ErrEmailTaken):
 		status, msg = http.StatusConflict, err.Error()
-	case errors.Is(err, domain.ErrForbidden):
+	case errors.Is(err, domain.ErrForbidden), errors.Is(err, domain.ErrOwnListing):
 		status, msg = http.StatusForbidden, err.Error()
 	case errors.Is(err, domain.ErrListingNotAvailable),
 		errors.Is(err, domain.ErrInsufficientStock),

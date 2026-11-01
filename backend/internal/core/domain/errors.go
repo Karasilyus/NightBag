@@ -15,4 +15,5 @@ var (
 	ErrEmailTaken          = errors.New("bu e-posta adresi zaten kayıtlı")
 	ErrInvalidCredentials  = errors.New("e-posta veya şifre hatalı")
 	ErrBusinessNotFound    = errors.New("işletme bulunamadı")
+	ErrOwnListing          = errors.New("kendi işletmenizin çantasını rezerve edemezsiniz")
 )

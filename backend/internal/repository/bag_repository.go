@@ -69,8 +69,9 @@ func scanListing(row rowScanner) (domain.Listing, error) {
 
 func (r *BagRepository) NearbyListings(ctx context.Context, f domain.NearbyFilter) ([]domain.Listing, error) {
 	const point = `ST_SetSRID(ST_MakePoint($1::float8, $2::float8), 4326)::geography`
+	const dist = `ST_Distance(b.geom::geography, ` + point + `)::float8`
 
-	q := listingSelect("ST_Distance(b.geom::geography, "+point+")::float8") + `
+	q := listingSelect(dist) + `
 	WHERE b.is_active
 	  AND ST_DWithin(b.geom::geography, ` + point + `, $3::float8)
 	  AND l.status = 'published'
@@ -78,7 +79,7 @@ func (r *BagRepository) NearbyListings(ctx context.Context, f domain.NearbyFilte
 	  AND (l.pickup_date + l.pickup_end) > (now() AT TIME ZONE 'Europe/Istanbul')
 	  AND ($4::text = '' OR l.category::text = $4::text)
 	  AND ($5::text = '' OR b.name ILIKE '%' || $5::text || '%' OR l.title ILIKE '%' || $5::text || '%')
-	ORDER BY 20, l.pickup_end
+	ORDER BY ` + dist + `, l.pickup_end
 	LIMIT $6::int`
 
 	rows, err := r.pool.Query(ctx, q, f.Lon, f.Lat, f.RadiusM, string(f.Category), f.Query, f.Limit)
@@ -99,7 +100,7 @@ func (r *BagRepository) NearbyListings(ctx context.Context, f domain.NearbyFilte
 }
 
 func (r *BagRepository) GetListing(ctx context.Context, id string) (*domain.Listing, error) {
-	q := listingSelect("NULL::float8") + ` WHERE l.id = $1`
+	q := listingSelect("NULL::float8") + ` WHERE l.id = $1 AND l.status <> 'draft' AND b.is_active`
 	l, err := scanListing(r.pool.QueryRow(ctx, q, id))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, domain.ErrNotFound
@@ -192,14 +193,16 @@ func (r *BagRepository) Reserve(ctx context.Context, userID, listingID string, q
 		status          string
 		windowPassed    bool
 		active          bool
+		ownerID         string
 	)
 	err = tx.QueryRow(ctx, `
 		SELECT l.price::float8, l.original_value::float8, l.quantity_remaining, l.status::text,
 		       (l.pickup_date + l.pickup_end) <= (now() AT TIME ZONE 'Europe/Istanbul'),
-		       b.is_active
+		       b.is_active, b.owner_id::text
 		FROM bag_listings l JOIN businesses b ON b.id = l.business_id
 		WHERE l.id = $1 FOR UPDATE OF l`, listingID,
-	).Scan(&price, &original, &remaining, &status, &windowPassed, &active)
+	).Scan(&price, &original, &remaining, &status, &windowPassed, &active, &ownerID)
+
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, domain.ErrNotFound
 	}
@@ -208,6 +211,8 @@ func (r *BagRepository) Reserve(ctx context.Context, userID, listingID string, q
 	}
 
 	switch {
+	case ownerID == userID:
+		return nil, domain.ErrOwnListing
 	case status != "published", !active:
 		return nil, domain.ErrListingNotAvailable
 	case windowPassed:
@@ -359,24 +364,27 @@ func (r *BagRepository) CompletePickup(ctx context.Context, ownerID, code string
 
 func (r *BagRepository) BusinessOverview(ctx context.Context, ownerID string) (*domain.BusinessOverview, error) {
 	var o domain.BusinessOverview
-	var title string
-	var photoURL *string
+	var title, photoURL *string
 
 	err := r.pool.QueryRow(ctx, `
         SELECT COALESCE(SUM(l.quantity_total), 0)::int,
                COALESCE(SUM(l.quantity_total - l.quantity_remaining), 0)::int,
                COALESCE(SUM(l.quantity_remaining), 0)::int,
-               MAX(l.title), MAX(l.photo_url)
+               (ARRAY_AGG(l.title ORDER BY l.created_at DESC))[1],
+               (ARRAY_AGG(l.photo_url ORDER BY l.created_at DESC))[1]
         FROM bag_listings l
         JOIN businesses b ON b.id = l.business_id
         WHERE b.owner_id = $1 AND l.status <> 'draft'
           AND l.pickup_date = (now() AT TIME ZONE 'Europe/Istanbul')::date`, ownerID,
 	).Scan(&o.Published, &o.Reserved, &o.Remaining, &title, &photoURL)
-
-	if err == nil && o.Published > 0 {
-		o.TodaysBag = &domain.TodaysBag{Title: title, ImageUrl: photoURL}
+	if err != nil {
+		return nil, err
 	}
-	return &o, err
+
+	if o.Published > 0 && title != nil {
+		o.TodaysBag = &domain.TodaysBag{Title: *title, ImageUrl: photoURL}
+	}
+	return &o, nil
 }
 
 func (r *BagRepository) BusinessReservations(ctx context.Context, ownerID string) ([]domain.Reservation, error) {
