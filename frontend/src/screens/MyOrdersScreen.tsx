@@ -7,7 +7,8 @@ import { reservationService } from '../services/reservation.service';
 const MyOrdersScreen = () => {
   const { width } = useWindowDimensions();
   const isWebGrid = Platform.OS === 'web' && width >= 700;
-  const webCardWidth = width >= 1150 ? '31.5%' : '48%';
+  const webColumns = width >= 1440 ? 3 : width >= 1000 ? 2 : 1;
+  const webCardWidth = (width - theme.SIZES.l * 2 - (webColumns - 1) * theme.SIZES.m) / webColumns;
   const [activeTab, setActiveTab] = useState('Tümü');
   const [reservations, setReservations] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -195,7 +196,7 @@ const styles = StyleSheet.create({
   tabText: { ...theme.FONTS.body2, color: theme.COLORS.textSecondary },
   activeTabText: { color: theme.COLORS.primary, fontWeight: '600' },
   scrollContent: { paddingHorizontal: theme.SIZES.l, paddingBottom: 100 },
-  webReservations: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', alignContent: 'flex-start' },
+  webReservations: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-start', alignContent: 'flex-start', columnGap: theme.SIZES.m },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: theme.SIZES.m },
   sectionTitle: { ...theme.FONTS.h3, color: theme.COLORS.text },
   sectionCount: { ...theme.FONTS.caption, color: theme.COLORS.textSecondary },

@@ -7,16 +7,19 @@ import { businessService } from '../services/business.service';
 const BusinessDashboardScreen = ({ navigation }: any) => {
   const [data, setData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [searchCode, setSearchCode] = useState('');
   const [isVerifying, setIsVerifying] = useState(false);
 
   const fetchData = async () => {
     setIsLoading(true);
+    setLoadError('');
     try {
       const response = await businessService.getDashboardData();
       setData(response.data);
     } catch (error) {
       console.error('Dashboard hatası:', error);
+      setLoadError('İşletme paneli verileri yüklenemedi. İnternet bağlantınızı kontrol edip tekrar deneyin.');
     } finally {
       setIsLoading(false);
     }
@@ -27,8 +30,8 @@ const BusinessDashboardScreen = ({ navigation }: any) => {
     return unsubscribe;
   }, [navigation]);
 
-  const handleVerifyCode = async () => {
-    const code = searchCode.trim().toUpperCase();
+  const handleVerifyCode = async (submittedCode = searchCode) => {
+    const code = submittedCode.trim().toUpperCase();
     if (!code) {
       Alert.alert('Uyarı', 'Lütfen müşterinin teslim alma kodunu girin (örn: NB-482615).');
       return;
@@ -52,7 +55,16 @@ const BusinessDashboardScreen = ({ navigation }: any) => {
   if (isLoading || !data) {
     return (
       <SafeAreaView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-        <ActivityIndicator size="large" color={theme.COLORS.primary} />
+        {isLoading
+          ? <ActivityIndicator size="large" color={theme.COLORS.primary} />
+          : (
+            <View style={styles.loadErrorContainer}>
+              <Text style={styles.loadErrorText}>{loadError || 'İşletme paneli verileri bulunamadı.'}</Text>
+              <TouchableOpacity style={styles.retryButton} onPress={fetchData}>
+                <Text style={styles.retryButtonText}>Tekrar dene</Text>
+              </TouchableOpacity>
+            </View>
+          )}
       </SafeAreaView>
     );
   }
@@ -105,14 +117,20 @@ const BusinessDashboardScreen = ({ navigation }: any) => {
         {data.todaysBag ? (
           <>
             <View style={styles.bagCard}>
-              <Image source={{ uri: data.todaysBag.imageUrl }} style={styles.bagImage} />
+              {data.todaysBag.imageUrl
+                ? <Image source={{ uri: data.todaysBag.imageUrl }} style={styles.bagImage} />
+                : <View style={[styles.bagImage, styles.bagImagePlaceholder]}><Ionicons name="bag-outline" size={24} color={theme.COLORS.primary} /></View>}
               <View style={styles.bagInfo}>
                 <Text style={styles.bagTitle}>{data.todaysBag.title}</Text>
-                <Text style={styles.bagPrice}>
-                  {data.todaysBag.price} ₺{' '}
-                  <Text style={styles.originalPrice}>{data.todaysBag.originalPrice} ₺</Text>
-                </Text>
-                <Text style={styles.bagTime}>Teslim: {data.todaysBag.time}</Text>
+                {data.todaysBag.price != null
+                  ? <Text style={styles.bagPrice}>
+                      {data.todaysBag.price} ₺{' '}
+                      {data.todaysBag.originalPrice != null
+                        ? <Text style={styles.originalPrice}>{data.todaysBag.originalPrice} ₺</Text>
+                        : null}
+                    </Text>
+                  : null}
+                {data.todaysBag.time ? <Text style={styles.bagTime}>Teslim: {data.todaysBag.time}</Text> : null}
               </View>
               <View style={styles.bagAction}>
                 <Ionicons name="chevron-forward" size={20} color={theme.COLORS.textSecondary} />
@@ -150,7 +168,7 @@ const BusinessDashboardScreen = ({ navigation }: any) => {
           />
           <TouchableOpacity 
             style={[styles.searchBtn, isVerifying && { opacity: 0.6 }]} 
-            onPress={handleVerifyCode}
+            onPress={() => handleVerifyCode()}
             disabled={isVerifying}
           >
             {isVerifying ? (
@@ -183,8 +201,7 @@ const BusinessDashboardScreen = ({ navigation }: any) => {
                     <TouchableOpacity 
                       style={styles.actionBtn} 
                       onPress={async () => {
-                        setSearchCode(order.code);
-                        await handleVerifyCode();
+                        await handleVerifyCode(order.code);
                       }}
                     >
                       <Ionicons name="checkmark" size={16} color={theme.COLORS.card} />
@@ -224,6 +241,10 @@ const BusinessDashboardScreen = ({ navigation }: any) => {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.COLORS.background },
+  loadErrorContainer: { alignItems: 'center', padding: theme.SIZES.l },
+  loadErrorText: { ...theme.FONTS.body2, color: theme.COLORS.textSecondary, textAlign: 'center', marginBottom: theme.SIZES.m },
+  retryButton: { backgroundColor: theme.COLORS.primary, paddingHorizontal: theme.SIZES.l, paddingVertical: theme.SIZES.s, borderRadius: theme.SIZES.buttonRadius },
+  retryButtonText: { ...theme.FONTS.body2, color: theme.COLORS.card, fontWeight: '600' },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: theme.SIZES.l, paddingTop: theme.SIZES.xl },
   logoRow: { flexDirection: 'row', alignItems: 'center', gap: theme.SIZES.xs },
   logoText: { ...theme.FONTS.h3, color: theme.COLORS.primary },
@@ -244,6 +265,7 @@ const styles = StyleSheet.create({
   addBtnText: { ...theme.FONTS.caption, color: theme.COLORS.primary, fontWeight: '600' },
   bagCard: { flexDirection: 'row', backgroundColor: theme.COLORS.card, padding: theme.SIZES.m, borderRadius: theme.SIZES.radius, borderWidth: 1, borderColor: theme.COLORS.primary, alignItems: 'center' },
   bagImage: { width: 60, height: 60, borderRadius: theme.SIZES.radius },
+  bagImagePlaceholder: { alignItems: 'center', justifyContent: 'center', backgroundColor: theme.COLORS.tagBackground },
   bagInfo: { flex: 1, marginLeft: theme.SIZES.m },
   bagTitle: { ...theme.FONTS.body2, fontWeight: '600', color: theme.COLORS.text, marginBottom: 4 },
   bagPrice: { ...theme.FONTS.body2, fontWeight: '700', color: theme.COLORS.primary, marginBottom: 2 },

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, ScrollView, ActivityIndicator, useWindowDimensions } from 'react-native';
 
 import { Ionicons } from '@expo/vector-icons';
 import theme from '../constants/theme';
@@ -9,6 +9,7 @@ import WebMapCanvas from '../components/web/WebMapCanvas';
 import { preferencesService, UserPreferences } from '../services/preferences.service';
 
 const MapScreen = ({ navigation }: any) => {
+  const { width } = useWindowDimensions();
   const [bags, setBags] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [mapCenter, setMapCenter] = useState({ latitude: 40.9845, longitude: 29.026 });
@@ -98,18 +99,15 @@ const MapScreen = ({ navigation }: any) => {
         </View>
       </SafeAreaView>
 
-      {/* Alt Yatay Liste (Absolute) */}
-      <View style={styles.bottomListContainer}>
+      {/* Harita üzerindeki dikey sonuç listesi */}
+      <View style={[styles.mapSidebar, { width: Math.min(width - 24, 360, Math.max(220, width * 0.32)) }]}>
+        <Text style={styles.listTitle}>Yakındaki çantalar</Text>
         {isLoading ? (
-          <ActivityIndicator size="large" color={theme.COLORS.primary} style={{ marginBottom: 40 }} />
+          <ActivityIndicator size="large" color={theme.COLORS.primary} style={styles.loadingIndicator} />
         ) : (
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.scrollContent}
-          >
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
             {bags.map((item) => (
-              <SurpriseBagCard key={item.id} {...item} isMapCard />
+              <SurpriseBagCard key={item.id} {...item} isMapSidebarCard />
             ))}
           </ScrollView>
         )}
@@ -187,14 +185,31 @@ const styles = StyleSheet.create({
     backgroundColor: theme.COLORS.card,
     borderRadius: 20,
   },
-  bottomListContainer: {
+  mapSidebar: {
     position: 'absolute',
-    bottom: 90, // Bottom tab navigation için boşluk
-    left: 0,
-    right: 0,
+    top: 104,
+    bottom: 90,
+    left: theme.SIZES.m,
+    backgroundColor: 'rgba(253, 251, 247, 0.96)',
+    borderRadius: theme.SIZES.radius,
+    padding: theme.SIZES.s,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.16,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  listTitle: {
+    ...theme.FONTS.body2,
+    color: theme.COLORS.text,
+    fontWeight: '700',
+    padding: theme.SIZES.s,
   },
   scrollContent: {
-    paddingHorizontal: theme.SIZES.m,
+    paddingBottom: theme.SIZES.s,
+  },
+  loadingIndicator: {
+    marginTop: theme.SIZES.xl,
   },
 });
 

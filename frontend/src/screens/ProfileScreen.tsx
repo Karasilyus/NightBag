@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, Ima
 import { Ionicons } from '@expo/vector-icons';
 import theme from '../constants/theme';
 import { authService } from '../services/auth.service';
+import { favoritesService } from '../services/favorites.service';
 import { preferencesService, UserPreferences } from '../services/preferences.service';
 
 const PERSONALIZATION_CATEGORIES = ['Fırın', 'Kafe', 'Tatlı', 'Yemek'];
@@ -25,34 +26,39 @@ const ProfileScreen = ({ navigation }: any) => {
   const [activeModal, setActiveModal] = useState<'edit' | 'location' | 'personalization' | 'privacy' | 'help' | null>(null);
   const [editedName, setEditedName] = useState('');
   const [isSavingName, setIsSavingName] = useState(false);
+  const [nameSaveError, setNameSaveError] = useState('');
   const [supportError, setSupportError] = useState('');
   const [settingsError, setSettingsError] = useState('');
   const canAccessBusinessPanel = user.role === 'business_owner'
     && Boolean(user.business_id)
     && Boolean(user.email.trim());
   const favoritePlaces = Array.from(new Map(
-    user.savedBusinesses.map((savedBag) => [savedBag.name, savedBag])
+    user.savedBusinesses.map((savedBag) => [savedBag.businessId, savedBag])
   ).values());
 
   useEffect(() => {
     const loadUser = async () => {
-      const [currentUser, currentPreferences, savedBags] = await Promise.all([
+      const [currentUser, currentPreferences, stats, favoriteListings] = await Promise.all([
         authService.getCurrentUser(),
         preferencesService.getPreferences(),
-        preferencesService.getSavedBags(),
+        authService.getCurrentUserStats(),
+        favoritesService.getFavorites(),
       ]);
-      if (currentUser) setUser(currentUser);
       setPreferences(currentPreferences);
-      setUser((previous) => ({
-        ...previous,
-        savedBusinesses: savedBags.map((bag) => ({
-          id: bag.id,
-          name: bag.name,
-          type: bag.type,
-          distance: bag.distance,
-          imageUrl: bag.imageUrl,
-        })),
-      }));
+      if (currentUser) {
+        setUser({
+          ...currentUser,
+          profileStats: stats,
+          savedBusinesses: favoriteListings.map((listing) => ({
+            id: listing.id,
+            businessId: listing.businessId,
+            name: listing.businessName,
+            type: listing.bagType,
+            distance: listing.distance,
+            imageUrl: listing.imageUrl,
+          })),
+        });
+      }
     };
 
     const refreshUser = () => {
@@ -86,6 +92,7 @@ const ProfileScreen = ({ navigation }: any) => {
     if (!fullName) return;
 
     setIsSavingName(true);
+    setNameSaveError('');
     try {
       const updatedUser = await authService.updateCurrentUser({ fullName });
       setUser((previous) => ({ ...previous, ...updatedUser }));
@@ -93,7 +100,7 @@ const ProfileScreen = ({ navigation }: any) => {
       setActiveModal(null);
     } catch (error) {
       console.error('Profil adı kaydedilemedi:', error);
-      setSettingsError('Profil adı kaydedilemedi. Lütfen tekrar deneyin.');
+      setNameSaveError(error instanceof Error ? error.message : 'Profil adı kaydedilemedi.');
     } finally {
       setIsSavingName(false);
     }
@@ -132,23 +139,17 @@ const ProfileScreen = ({ navigation }: any) => {
     }
   };
 
-  const toggleSavedBag = async (bag: typeof user.savedBusinesses[number]) => {
+  const removeFavoriteBusiness = async (businessId: string) => {
     try {
-      await preferencesService.toggleSavedBag({
-        id: bag.id,
-        name: bag.name,
-        type: bag.type,
-        distance: bag.distance,
-        imageUrl: bag.imageUrl,
-      });
+      await favoritesService.setFavorite(businessId, true);
       setUser((previous) => ({
         ...previous,
-        savedBusinesses: previous.savedBusinesses.filter((savedBag) => savedBag.id !== bag.id),
+        savedBusinesses: previous.savedBusinesses.filter((favorite) => favorite.businessId !== businessId),
       }));
       setSettingsError('');
     } catch (error) {
-      console.error('Kaydedilen çanta kaldırılamadı:', error);
-      setSettingsError('Kaydedilen çanta kaldırılamadı. Lütfen tekrar deneyin.');
+      console.error('Favori işletme kaldırılamadı:', error);
+      setSettingsError('Favori işletme kaldırılamadı. Lütfen tekrar deneyin.');
     }
   };
 
@@ -173,6 +174,7 @@ const ProfileScreen = ({ navigation }: any) => {
               style={styles.editBtn}
               onPress={() => {
                 setEditedName(user.fullName);
+                setNameSaveError('');
                 setActiveModal('edit');
               }}
             >
@@ -278,44 +280,27 @@ const ProfileScreen = ({ navigation }: any) => {
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Favori mekanların</Text>
           <Text style={styles.seeAllText}>{favoritePlaces.length} mekan</Text>
-        </View>
-        <Text style={styles.preferenceNote}>Favori mekanlar, kaydettiğin çantalara göre bu cihazda oluşturulur.</Text>
-        {favoritePlaces.map((place) => (
-          <View key={place.name} style={styles.favCard}>
-            <Image source={{ uri: place.imageUrl }} style={styles.favImage} />
-            <View style={styles.favInfo}>
-              <Text style={styles.favName}>{place.name}</Text>
-              <Text style={styles.favDesc}>{place.type}</Text>
-            </View>
-            <Ionicons name="heart" size={22} color={theme.COLORS.primary} />
           </View>
-        ))}
-        {favoritePlaces.length === 0 && (
-          <Text style={styles.emptyFavorites}>Bir çantayı kaydederek mekanı favorilerine ekleyebilirsin.</Text>
-        )}
-
-        {/* Kaydedilenler */}
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Kaydettiğin çantalar</Text>
-          <Text style={styles.seeAllText}>Tümü - {user.savedBusinesses.length}</Text>
-        </View>
-
-        {user.savedBusinesses.map((biz: any) => (
-          <View key={biz.id} style={styles.favCard}>
-            <Image source={{ uri: biz.imageUrl }} style={styles.favImage} />
-            <View style={styles.favInfo}>
-              <Text style={styles.favName}>{biz.name}</Text>
-              <Text style={styles.favDesc}>{biz.type} • {biz.distance}</Text>
+          <Text style={styles.preferenceNote}>Favori mekanların hesabına kaydedilir. Bir işletmenin aktif çantaları burada gösterilir.</Text>
+          {favoritePlaces.map((place) => (
+            <View key={place.businessId} style={styles.favCard}>
+              <Image source={{ uri: place.imageUrl }} style={styles.favImage} />
+              <View style={styles.favInfo}>
+                <Text style={styles.favName}>{place.name}</Text>
+                <Text style={styles.favDesc}>{place.type}</Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => removeFavoriteBusiness(place.businessId)}
+                accessibilityRole="button"
+                accessibilityLabel={`${place.name} favorilerden çıkar`}
+              >
+                <Ionicons name="heart" size={22} color={theme.COLORS.primary} />
+              </TouchableOpacity>
             </View>
-            <TouchableOpacity onPress={() => toggleSavedBag(biz)} accessibilityRole="button" accessibilityLabel={`${biz.name} kaydını kaldır`}>
-              <Ionicons name="heart" size={24} color={theme.COLORS.primary} />
-            </TouchableOpacity>
-          </View>
-        ))}
-
-        {user.savedBusinesses.length === 0 && (
-          <Text style={{ textAlign: 'center', color: theme.COLORS.textSecondary, marginBottom: theme.SIZES.m }}>Henüz çanta kaydetmedin.</Text>
-        )}
+          ))}
+          {favoritePlaces.length === 0 && (
+            <Text style={styles.emptyFavorites}>Bir işletmenin çantasındaki kalp simgesine dokunarak favorilerine ekleyebilirsin.</Text>
+          )}
 
         {canAccessBusinessPanel && (
           <TouchableOpacity
@@ -336,6 +321,7 @@ const ProfileScreen = ({ navigation }: any) => {
             {activeModal === 'edit' && (
               <>
                 <Text style={styles.modalTitle}>Profil bilgilerini düzenle</Text>
+                <Text style={styles.modalDescription}>Profil adını sunucuya kaydetme özelliği backend desteği bekliyor. Şu an yaptığın değişiklikler kaydedilmiyor.</Text>
                 <TextInput
                   style={styles.profileInput}
                   value={editedName}
@@ -343,6 +329,7 @@ const ProfileScreen = ({ navigation }: any) => {
                   placeholder="Ad Soyad"
                   accessibilityLabel="Ad soyad"
                 />
+                {nameSaveError ? <Text style={styles.settingsError}>{nameSaveError}</Text> : null}
                 <TouchableOpacity style={styles.modalPrimaryButton} onPress={saveName} disabled={isSavingName || !editedName.trim()}>
                   <Text style={styles.modalPrimaryText}>{isSavingName ? 'Kaydediliyor...' : 'Kaydet'}</Text>
                 </TouchableOpacity>
@@ -407,7 +394,7 @@ const ProfileScreen = ({ navigation }: any) => {
               <>
                 <Text style={styles.modalTitle}>Hesap ve gizlilik</Text>
                 <Text style={styles.modalDescription}>
-                  Profil adı ve uygulama tercihleri bu cihazda saklanır. Hesap silme, şifre sıfırlama ve sunucudaki kişisel verileri yönetme özellikleri backend desteği gerektirir ve henüz uygulamada sunulmuyor.
+                  Profil adı mevcut giriş bilgilerinden gösterilir ve sunucuda değiştirilemez. Uygulama tercihleri bu cihazda saklanır. Hesap silme, şifre sıfırlama ve sunucudaki kişisel verileri yönetme özellikleri backend desteği gerektirir.
                 </Text>
                 <TouchableOpacity style={styles.modalPrimaryButton} onPress={() => setActiveModal(null)}>
                   <Text style={styles.modalPrimaryText}>Anladım</Text>

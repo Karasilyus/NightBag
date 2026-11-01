@@ -1,49 +1,94 @@
 import { apiClient } from './api';
 
+interface BusinessOverviewResponse {
+  published: number;
+  reserved: number;
+  remaining: number;
+  todaysBag: { title: string; imageUrl?: string | null } | null;
+}
+
+interface BusinessResponse {
+  id: string;
+  name: string;
+}
+
+interface BusinessReservation {
+  id: string;
+  title: string;
+  quantity: number;
+  pickup_code: string;
+  status: string;
+  pickup_date: string;
+  pickup_start: string;
+  pickup_end: string;
+  total_price: number;
+}
+
+const mapBusinessOrder = (reservation: BusinessReservation) => ({
+  id: reservation.id,
+  name: reservation.title || 'Çanta rezervasyonu',
+  quantity: reservation.quantity,
+  code: reservation.pickup_code,
+  status: reservation.status === 'picked_up' ? 'delivered' : 'pending',
+  title: reservation.title,
+  date: reservation.pickup_date,
+  time: `${reservation.pickup_start}-${reservation.pickup_end}`,
+  totalPrice: reservation.total_price,
+});
+
 export const businessService = {
   /**
    * İşletme genel bakış istatistiklerini getirir.
    * BusinessDashboardScreen'de kullanılır.
    */
   getDashboardData: async (): Promise<{ data: any }> => {
-    try {
-      const response = await apiClient.get('/business/overview');
-      const overview = response.data;
-
-      // Backend'den sadece istatistikler dönüyor (published, reserved, remaining).
-      // Dashboard'da gösterilen diğer veriler (işletme adı, bugünün çantası, siparişler)
-      // şu an backend'de ayrı endpoint'ler yok, ileride eklenecek.
-      // Şimdilik istatistikleri mapleyip kalan alanları placeholder bırakıyoruz.
-      return {
-        data: {
-          businessName: 'İşletmem',
-          dateString: new Date().toLocaleDateString('tr-TR', {
-            weekday: 'long',
-            day: 'numeric',
-            month: 'long',
-          }),
-          stats: {
-            published: overview.published,
-            sold: overview.reserved,
-            remaining: overview.remaining,
-          },
-          // Bugünün çantası ve siparişler ileride ayrı endpoint'lerden çekilecek
-          todaysBag: null,
-          orders: [],
-        },
-      };
-    } catch (error) {
-      console.error('Dashboard verisi yüklenemedi:', error);
-      return {
-        data: {
-          businessName: 'İşletmem',
-          dateString: '',
-          stats: { published: 0, sold: 0, remaining: 0 },
-          todaysBag: null,
-          orders: [],
-        },
-      };
+    const [overviewResponse, businessResponse, ordersResponse] = await Promise.all([
+      apiClient.get<BusinessOverviewResponse>('/business/overview'),
+      apiClient.get<BusinessResponse>('/business/me'),
+      apiClient.get<BusinessReservation[]>('/business/reservations'),
+    ]);
+    const overview = overviewResponse.data;
+    if (
+      !overview
+      || !Number.isFinite(overview.published)
+      || !Number.isFinite(overview.reserved)
+      || !Number.isFinite(overview.remaining)
+    ) {
+      throw new Error('İşletme özeti yanıtı geçersiz.');
     }
+    if (!businessResponse.data?.id || !businessResponse.data.name) {
+      throw new Error('İşletme bilgisi yanıtı geçersiz.');
+    }
+    if (!Array.isArray(ordersResponse.data)) {
+      throw new Error('İşletme rezervasyonları yanıtı geçersiz.');
+    }
+
+    const todaysBag = overview.todaysBag;
+    const imageUrl = typeof todaysBag?.imageUrl === 'string' ? todaysBag.imageUrl : '';
+
+    return {
+      data: {
+        businessName: businessResponse.data.name,
+        businessId: businessResponse.data?.id,
+        dateString: new Date().toLocaleDateString('tr-TR', {
+          weekday: 'long',
+          day: 'numeric',
+          month: 'long',
+        }),
+        stats: {
+          published: overview.published,
+          sold: overview.reserved,
+          remaining: overview.remaining,
+        },
+        todaysBag: todaysBag
+          ? {
+              title: todaysBag.title,
+              imageUrl: imageUrl || undefined,
+            }
+          : null,
+        orders: ordersResponse.data.map(mapBusinessOrder),
+      },
+    };
   },
 
   /**

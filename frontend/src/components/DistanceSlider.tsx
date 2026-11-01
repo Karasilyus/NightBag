@@ -15,9 +15,10 @@ const DistanceSlider = ({ value, onCommit }: DistanceSliderProps) => {
   const [selectedValue, setSelectedValue] = useState(value);
 
   const getValueFromLocation = useCallback((locationX: number) => {
+    if (!Number.isFinite(locationX)) return selectedValue;
     const ratio = Math.max(0, Math.min(1, locationX / TRACK_WIDTH));
     return Math.round(MIN_DISTANCE + ratio * (MAX_DISTANCE - MIN_DISTANCE));
-  }, []);
+  }, [selectedValue]);
 
   const updateValue = useCallback((locationX: number) => {
     const nextValue = getValueFromLocation(locationX);
@@ -67,7 +68,7 @@ const DistanceSlider = ({ value, onCommit }: DistanceSliderProps) => {
             <View style={[styles.thumb, { left: `${progress}%` }]} />
           </View>
         </View>
-        <Text style={styles.value}>{selectedValue >= MAX_DISTANCE ? '50 km+' : `${selectedValue} km`}</Text>
+        <Text style={styles.value}>{selectedValue >= MAX_DISTANCE ? '50 km' : `${selectedValue} km`}</Text>
         <TouchableOpacity onPress={selectAll} accessibilityRole="button" accessibilityLabel="Tüm mesafeyi göster">
           <Text style={styles.allButton}>Tümü</Text>
         </TouchableOpacity>
@@ -110,6 +111,7 @@ const styles = StyleSheet.create({
   },
   thumb: {
     position: 'absolute',
+    top: -6,
     width: 16,
     height: 16,
     marginLeft: -8,

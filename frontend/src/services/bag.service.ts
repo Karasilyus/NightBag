@@ -1,7 +1,7 @@
 import { apiClient } from './api';
 
 // Backend'den dönen Listing tipini frontend'in beklediği formata dönüştürür.
-const mapListingToBag = (listing: any) => ({
+export const mapListingToBag = (listing: any) => ({
   id: listing.id,
   businessName: listing.business_name,
   bagType: listing.title,

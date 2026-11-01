@@ -114,6 +114,8 @@ const WebMapCanvas = ({
   const renderedMarkers = useRef<GoogleMapMarker[]>([]);
   const onSelectLocationRef = useRef(onSelectLocation);
   const onCenterChangeRef = useRef(onCenterChange);
+  const previousCenter = useRef(center);
+  const previousRadiusKm = useRef(radiusKm);
   const [mapApi, setMapApi] = useState<GoogleMapsApi | null>(null);
   const [errorMessage, setErrorMessage] = useState('');
   const apiKey = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY?.trim();
@@ -159,6 +161,8 @@ const WebMapCanvas = ({
       fullscreenControl: false,
       mapTypeControl: false,
       streetViewControl: false,
+      zoomControl: true,
+      scrollwheel: true,
       gestureHandling: 'greedy',
     });
 
@@ -191,9 +195,27 @@ const WebMapCanvas = ({
 
   useEffect(() => {
     if (!mapInstance.current) return;
-    mapInstance.current.setCenter({ lat: center.latitude, lng: center.longitude });
-    mapInstance.current.setZoom(zoom);
-  }, [center.latitude, center.longitude, zoom]);
+    const map = mapInstance.current;
+    const currentCenter = map.getCenter();
+    const centerChanged = (
+      Math.abs(previousCenter.current.latitude - center.latitude) > 0.000001
+      || Math.abs(previousCenter.current.longitude - center.longitude) > 0.000001
+    );
+    const radiusChanged = previousRadiusKm.current !== radiusKm;
+    const mapAlreadyAtCenter = currentCenter
+      && Math.abs(currentCenter.lat() - center.latitude) < 0.00001
+      && Math.abs(currentCenter.lng() - center.longitude) < 0.00001;
+
+    if (centerChanged && !mapAlreadyAtCenter) {
+      map.setCenter({ lat: center.latitude, lng: center.longitude });
+      map.setZoom(zoom);
+    } else if (radiusChanged) {
+      map.setZoom(zoom);
+    }
+
+    previousCenter.current = center;
+    previousRadiusKm.current = radiusKm;
+  }, [center.latitude, center.longitude, radiusKm, zoom]);
 
   useEffect(() => {
     if (!mapApi || !mapInstance.current) return;

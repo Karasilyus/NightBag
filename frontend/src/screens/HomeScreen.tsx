@@ -21,7 +21,8 @@ const HomeScreen = ({ navigation }: any) => {
     favoriteCategories: [],
   });
   const { width } = useWindowDimensions();
-  const webGridWidth = width >= 1200 ? '31.5%' : '48%';
+  const webColumns = width >= 1440 ? 5 : width >= 1150 ? 4 : width >= 900 ? 3 : 2;
+  const webGridWidth = (width - theme.SIZES.l * 2 - (webColumns - 1) * theme.SIZES.m) / webColumns;
   const displayedBags = activeCategory === 'Tümü' && preferences.favoriteCategories.length > 0
     ? [
         ...bags.filter((bag) => preferences.favoriteCategories.includes(bag.category)),
@@ -278,7 +279,9 @@ const styles = StyleSheet.create({
   webCardsContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-start',
+    columnGap: theme.SIZES.m,
+    rowGap: theme.SIZES.m,
     alignItems: 'flex-start',
   },
   emptyContainer: {

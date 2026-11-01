@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import { apiClient } from './api';
+import { favoritesService } from './favorites.service';
 
 type BusinessRegistration = {
   name: string;
@@ -35,6 +36,7 @@ const persistAuthResponse = async (data: AuthResponse) => {
     ...data.user,
     fullName: data.user.full_name,
   };
+  favoritesService.clearCache();
   await AsyncStorage.multiSet([
     ['authToken', data.token],
     ['currentUser', JSON.stringify(user)],
@@ -89,18 +91,23 @@ export const authService = {
     }
   },
 
-  updateCurrentUser: async (updates: Record<string, unknown>) => {
-    const userJson = await AsyncStorage.getItem('currentUser');
-    if (!userJson) {
-      throw new Error('Düzenlenecek kullanıcı bulunamadı.');
+  getCurrentUserStats: async (): Promise<{ savedBags: number; moneySaved: number }> => {
+    const response = await apiClient.get<{ bags_saved: number; money_saved: number }>('/users/me/stats');
+    if (!Number.isFinite(response.data.bags_saved) || !Number.isFinite(response.data.money_saved)) {
+      throw new Error('Profil istatistikleri yanıtı geçersiz.');
     }
+    return {
+      savedBags: response.data.bags_saved,
+      moneySaved: response.data.money_saved,
+    };
+  },
 
-    const user = { ...JSON.parse(userJson), ...updates };
-    await AsyncStorage.setItem('currentUser', JSON.stringify(user));
-    return user;
+  updateCurrentUser: async (_updates: { fullName: string }): Promise<{ fullName: string }> => {
+    throw new Error('Profil adı güncelleme servisi henüz kullanılamıyor.');
   },
 
   logout: async () => {
+    favoritesService.clearCache();
     await AsyncStorage.multiRemove(['currentUser', 'authToken']);
   },
 

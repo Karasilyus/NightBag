@@ -3,10 +3,11 @@ import { View, Text, StyleSheet, Image, TouchableOpacity, Alert, ViewStyle } fro
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import theme from '../constants/theme';
-import { preferencesService } from '../services/preferences.service';
+import { favoritesService } from '../services/favorites.service';
 
 interface SurpriseBagCardProps {
   id?: string;
+  businessId?: string;
   businessName: string;
   bagType: string;
   distance: string;
@@ -16,6 +17,7 @@ interface SurpriseBagCardProps {
   imageUrl: string;
   remainingBags: number;
   isMapCard?: boolean; // Harita sayfasındaki yatay kartlar için
+  isMapSidebarCard?: boolean;
   webGrid?: boolean;
   gridWidth?: ViewStyle['width'];
 }
@@ -31,51 +33,79 @@ const SurpriseBagCard: React.FC<SurpriseBagCardProps> = (props) => {
     imageUrl,
     remainingBags,
     isMapCard = false,
+    isMapSidebarCard = false,
     webGrid = false,
     gridWidth = '48%',
   } = props;
   const navigation = useNavigation<any>();
   const [isSaved, setIsSaved] = React.useState(false);
+  const [isFavoriteReady, setIsFavoriteReady] = React.useState(false);
+  const [favoriteLoadFailed, setFavoriteLoadFailed] = React.useState(false);
+  const [isSavingFavorite, setIsSavingFavorite] = React.useState(false);
 
   React.useEffect(() => {
     let isMounted = true;
-    preferencesService.getSavedBags()
-      .then((savedBags) => {
-        if (isMounted) setIsSaved(savedBags.some((bag) => bag.id === props.id));
+    const unsubscribe = favoritesService.subscribe((businessId, isFavorite) => {
+      if (businessId === props.businessId) setIsSaved(isFavorite);
+    });
+    favoritesService.isBusinessFavorited(props.businessId || '')
+      .then((isFavorite) => {
+        if (isMounted) {
+          setIsSaved(isFavorite);
+          setFavoriteLoadFailed(false);
+          setIsFavoriteReady(true);
+        }
       })
-      .catch((error) => console.error('Kaydedilen çantalar yüklenemedi:', error));
+      .catch(() => {
+        if (isMounted) {
+          setFavoriteLoadFailed(true);
+          setIsFavoriteReady(true);
+        }
+      });
 
     return () => {
       isMounted = false;
+      unsubscribe();
     };
-  }, [props.id]);
+  }, [props.businessId]);
 
   const toggleFavorite = async (event: any) => {
     event.stopPropagation();
-    if (!props.id) {
-      Alert.alert('Çanta kaydedilemedi', 'Bu çantanın kimliği bulunamadı.');
+    if (!props.businessId) {
+      Alert.alert('Favoriye eklenemedi', 'Bu işletmenin kimliği bulunamadı.');
+      return;
+    }
+    if (!isFavoriteReady) {
+      Alert.alert('Favoriler yüklenemedi', 'İşletme favorileri yüklenmeden bu işlem yapılamıyor. Lütfen tekrar deneyin.');
       return;
     }
 
+    setIsSavingFavorite(true);
     try {
-      const saved = await preferencesService.toggleSavedBag({
-        id: props.id,
-        name: businessName,
-        type: bagType,
-        distance,
-        imageUrl,
-      });
-      setIsSaved(saved);
+      let currentFavorite = isSaved;
+      if (favoriteLoadFailed) {
+        currentFavorite = await favoritesService.isBusinessFavorited(props.businessId);
+        setIsSaved(currentFavorite);
+        setFavoriteLoadFailed(false);
+      }
+      await favoritesService.setFavorite(props.businessId, currentFavorite);
     } catch (error) {
-      console.error('Çanta kaydedilemedi:', error);
-      Alert.alert('Hata', 'Çanta kaydedilirken bir sorun oluştu.');
+      console.error('Favori güncellenemedi:', error);
+      Alert.alert('Hata', 'Favori güncellenemedi. Lütfen tekrar deneyin.');
+    } finally {
+      setIsSavingFavorite(false);
     }
   };
 
   return (
-    <TouchableOpacity 
-      style={[styles.card, webGrid && { width: gridWidth }, isMapCard && styles.mapCard]}
-      onPress={() => navigation.navigate('BagDetails', { bag: { id: props.id, businessName, bagType, distance, timeInfo, price, originalPrice, imageUrl, remainingBags } })}
+    <TouchableOpacity
+      style={[
+        styles.card,
+        webGrid && { width: gridWidth, marginBottom: 0 },
+        isMapCard && styles.mapCard,
+        isMapSidebarCard && styles.mapSidebarCard,
+      ]}
+      onPress={() => navigation.navigate('BagDetails', { bag: { id: props.id, businessId: props.businessId, businessName, bagType, distance, timeInfo, price, originalPrice, imageUrl, remainingBags } })}
     >
       <View style={styles.imageContainer}>
         <Image source={{ uri: imageUrl }} style={styles.image} />
@@ -88,7 +118,15 @@ const SurpriseBagCard: React.FC<SurpriseBagCardProps> = (props) => {
         </View>
 
         {/* Sağ Üst Favori Butonu */}
-        <TouchableOpacity style={styles.favoriteBtn} onPress={toggleFavorite} accessibilityRole="button" accessibilityLabel={isSaved ? 'Kaydedilenlerden çıkar' : 'Çantayı kaydet'}>
+        <TouchableOpacity
+          style={[styles.favoriteBtn, (!isFavoriteReady || isSavingFavorite) && styles.favoriteBtnDisabled]}
+          onPress={toggleFavorite}
+          disabled={!isFavoriteReady || isSavingFavorite}
+          accessibilityRole="button"
+          accessibilityLabel={favoriteLoadFailed
+            ? 'Favori durumu yüklenemedi; dokunarak tekrar dene'
+            : isSaved ? 'İşletmeyi favorilerden çıkar' : 'İşletmeyi favorilere ekle'}
+        >
             <Ionicons name={isSaved ? 'heart' : 'heart-outline'} size={20} color={theme.COLORS.primary} />
         </TouchableOpacity>
       </View>
@@ -132,6 +170,10 @@ const styles = StyleSheet.create({
     marginRight: theme.SIZES.m,
     marginBottom: 0,
   },
+  mapSidebarCard: {
+    width: '100%',
+    marginBottom: theme.SIZES.m,
+  },
   imageContainer: {
     width: '100%',
     height: 140,
@@ -165,6 +207,9 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  favoriteBtnDisabled: {
+    opacity: 0.55,
   },
   content: {
     padding: theme.SIZES.m,
