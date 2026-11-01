@@ -26,6 +26,8 @@ const (
 	tokenTTL       = 30 * 24 * time.Hour
 )
 
+var dummyHash, _ = hashPassword("dummy-password-for-timing")
+
 var (
 	uuidPattern  = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
 	emailPattern = regexp.MustCompile(`^[^@\s]+@[^@\s]+\.[^@\s]+$`)
@@ -191,12 +193,17 @@ func (s *AuthService) Login(ctx context.Context, email, password string) (*domai
 	email = strings.ToLower(strings.TrimSpace(email))
 	u, hash, err := s.repo.GetCredentials(ctx, email)
 	if errors.Is(err, domain.ErrUserNotFound) {
+		verifyPassword(password, dummyHash)
 		return nil, domain.ErrInvalidCredentials
 	}
 	if err != nil {
 		return nil, err
 	}
-	if hash == "" || !verifyPassword(password, hash) {
+	if hash == "" {
+		verifyPassword(password, dummyHash)
+		return nil, domain.ErrInvalidCredentials
+	}
+	if !verifyPassword(password, hash) {
 		return nil, domain.ErrInvalidCredentials
 	}
 	return &domain.AuthResult{Token: s.issueToken(u.ID), User: *u}, nil

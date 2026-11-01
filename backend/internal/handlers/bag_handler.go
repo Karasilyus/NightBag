@@ -15,12 +15,13 @@ import (
 var uuidRe = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
 
 type BagHandler struct {
-	svc     *services.BagService
-	authSvc *services.AuthService
+	svc      *services.BagService
+	authSvc  *services.AuthService
+	loginLim *loginLimiter
 }
 
 func NewBagHandler(svc *services.BagService, authSvc *services.AuthService) *BagHandler {
-	return &BagHandler{svc: svc, authSvc: authSvc}
+	return &BagHandler{svc: svc, authSvc: authSvc, loginLim: newDefaultLoginLimiter()}
 }
 
 func (h *BagHandler) Register(mux *http.ServeMux) {

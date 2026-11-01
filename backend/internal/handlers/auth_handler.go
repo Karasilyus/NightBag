@@ -1,17 +1,13 @@
 package handlers
 
 import (
+	"errors"
 	"net/http"
+	"strings"
 
 	"nightbag/internal/core/domain"
 )
 
-// POST /api/v1/auth/register
-// Müşteri:        {"full_name":"Ali Veli","email":"ali@x.com","password":"12345678"}
-// İşletme sahibi: {"full_name":"...","email":"...","password":"...","role":"business_owner",
-//
-//	"business":{"name":"Moda Fırını","category":"firin","address":"Moda Cd. 1",
-//	            "district":"Kadıköy","lat":40.98,"lon":29.025}}
 func (h *BagHandler) register(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		FullName string                `json:"full_name"`
@@ -37,7 +33,6 @@ func (h *BagHandler) register(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, res)
 }
 
-// POST /api/v1/auth/login   gövde: {"email":"...","password":"..."}
 func (h *BagHandler) login(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Email    string `json:"email"`
@@ -46,15 +41,28 @@ func (h *BagHandler) login(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &req) {
 		return
 	}
+
+	key := clientIP(r) + "|" + strings.ToLower(strings.TrimSpace(req.Email))
+	if !h.loginLim.allow(key) {
+		w.Header().Set("Retry-After", "900")
+		writeJSON(w, http.StatusTooManyRequests, map[string]string{
+			"error": "çok fazla başarısız deneme, lütfen 15 dakika sonra tekrar deneyin",
+		})
+		return
+	}
+
 	res, err := h.authSvc.Login(r.Context(), req.Email, req.Password)
 	if err != nil {
+		if errors.Is(err, domain.ErrInvalidCredentials) {
+			h.loginLim.fail(key)
+		}
 		writeError(w, err)
 		return
 	}
+	h.loginLim.reset(key)
 	writeJSON(w, http.StatusOK, res)
 }
 
-// GET /api/v1/business/me   işletme sahibinin işletme bilgisi (panel ve ilan yayınlama için)
 func (h *BagHandler) myBusiness(w http.ResponseWriter, r *http.Request, ownerID string) {
 	b, err := h.authSvc.MyBusiness(r.Context(), ownerID)
 	if err != nil {

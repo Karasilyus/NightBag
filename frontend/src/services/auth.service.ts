@@ -21,6 +21,8 @@ type AuthResponse = {
   };
 };
 
+
+
 const persistAuthResponse = async (data: AuthResponse) => {
   if (!data.token || !data.user?.id) {
     throw new Error('Sunucudan geçerli bir oturum yanıtı alınamadı.');
@@ -95,4 +97,27 @@ export const authService = {
   logout: async () => {
     await AsyncStorage.multiRemove(['currentUser', 'authToken']);
   },
+
+    restoreSession: async () => {
+    const token = await AsyncStorage.getItem('authToken');
+    const userJson = await AsyncStorage.getItem('currentUser');
+    if (!token || !userJson) return null;
+
+    let user: { role: string } | null = null;
+    try {
+      user = JSON.parse(userJson);
+    } catch {
+      await AsyncStorage.multiRemove(['currentUser', 'authToken']);
+      return null;
+    }
+
+    try {
+      await apiClient.get('/users/me'); // token geçersizse 401 → interceptor oturumu siler
+      return user;
+    } catch (error: any) {
+      if (error.response?.status === 401) return null;
+      return user; // ağ hatası: sunucuya ulaşılamıyorsa yerel oturumla devam et
+    }
+  },
 };
+

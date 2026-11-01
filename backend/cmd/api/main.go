@@ -34,7 +34,8 @@ func withLogging(next http.Handler) http.Handler {
 func withCORS(origin string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", origin)
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-User-ID")
+		w.Header().Add("Vary", "Origin")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-User-ID")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)
@@ -51,13 +52,21 @@ func main() {
 	dbURL := getenv("DATABASE_URL", "postgres://nightbag:nightbag@localhost:5432/nightbag?sslmode=disable")
 	port := getenv("PORT", "8080")
 	corsOrigin := getenv("CORS_ORIGIN", "*")
+	isProd := getenv("APP_ENV", "dev") == "production"
 	authSecret := getenv("AUTH_SECRET", "")
 	allowHeader := getenv("ALLOW_USER_ID_HEADER", "false") == "true"
+
 	if authSecret == "" {
+		if isProd {
+			log.Fatal("AUTH_SECRET production ortamında zorunlu")
+		}
 		authSecret = "dev-secret-degistir"
 		log.Println("UYARI: AUTH_SECRET tanımlı değil, geliştirme anahtarı kullanılıyor")
 	}
 	if allowHeader {
+		if isProd {
+			log.Fatal("ALLOW_USER_ID_HEADER production'da açık olamaz")
+		}
 		log.Println("UYARI: ALLOW_USER_ID_HEADER=true (güvensiz, sadece geliştirme için)")
 	}
 

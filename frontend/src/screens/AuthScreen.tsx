@@ -11,7 +11,13 @@ const BUSINESS_CATEGORIES = [
   { value: 'tatli', label: 'Tatlı', icon: 'ice-cream-outline' as const },
   { value: 'yemek', label: 'Yemek', icon: 'fast-food-outline' as const },
 ];
-
+const showMessage = (title: string, message: string) => {
+  if (Platform.OS === 'web') {
+    window.alert(`${title}\n\n${message}`);
+  } else {
+    Alert.alert(title, message);
+  }
+};
 const AuthScreen = ({ navigation }: any) => {
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
@@ -26,7 +32,7 @@ const AuthScreen = ({ navigation }: any) => {
   const [businessLongitude, setBusinessLongitude] = useState<number | null>(null);
   const [isGettingLocation, setIsGettingLocation] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-
+  const [errorMsg, setErrorMsg] = useState('');
   const handleUseCurrentLocation = async () => {
     setIsGettingLocation(true);
     try {
@@ -49,15 +55,22 @@ const AuthScreen = ({ navigation }: any) => {
     }
   };
 
-  const handleAuth = async () => {
+   const handleAuth = async () => {
+    setErrorMsg('');
+
     if (!email.trim() || !password || (!isLogin && !fullName.trim())) {
-      Alert.alert('Eksik bilgi', 'Lütfen gerekli alanları doldurun.');
+      setErrorMsg('Lütfen gerekli alanları doldurun.');
+      return;
+    }
+
+    if (!isLogin && password.length < 8) {
+      setErrorMsg('Şifre en az 8 karakter olmalı.');
       return;
     }
 
     if (!isLogin && accountType === 'business_owner') {
       if (!businessName.trim() || !businessAddress.trim() || !businessDistrict.trim()) {
-        Alert.alert('Eksik işletme bilgisi', 'İşletme adı, adresi ve ilçesi zorunludur.');
+        setErrorMsg('İşletme adı, adresi ve ilçesi zorunludur.');
         return;
       }
       if (
@@ -70,7 +83,7 @@ const AuthScreen = ({ navigation }: any) => {
         || businessLongitude < -180
         || businessLongitude > 180
       ) {
-        Alert.alert('İşletme konumu gerekli', 'Konumunuzu kullanın veya enlem ve boylamı elle girin.');
+        setErrorMsg('İşletme konumu gerekli: konumunuzu kullanın veya enlem ve boylamı elle girin.');
         return;
       }
     }
@@ -102,7 +115,7 @@ const AuthScreen = ({ navigation }: any) => {
       const role = result.data.user.role;
       navigation.replace(role === 'business_owner' ? 'BusinessFlow' : 'MainFlow');
     } catch (error: any) {
-      Alert.alert('Hata', error.response?.data?.error || error.message || 'Bir sorun oluştu.');
+      setErrorMsg(error.response?.data?.error || error.message || 'Bir sorun oluştu.');
     } finally {
       setIsLoading(false);
     }
@@ -324,7 +337,7 @@ const AuthScreen = ({ navigation }: any) => {
                 <Text style={styles.forgotPasswordText}>Şifremi unuttum</Text>
               </TouchableOpacity>
             )}
-
+            {errorMsg !== '' && <Text style={styles.errorText}>{errorMsg}</Text>}
             <TouchableOpacity 
               style={styles.primaryBtn} 
               onPress={handleAuth}
@@ -632,6 +645,12 @@ const styles = StyleSheet.create({
     ...theme.FONTS.body2,
     fontWeight: '600',
     color: theme.COLORS.primary,
+  },
+    errorText: {
+    color: '#C62828',
+    fontSize: 14,
+    marginBottom: 12,
+    textAlign: 'center',
   },
 });
 

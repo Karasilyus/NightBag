@@ -1,12 +1,31 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Image, TouchableOpacity, SafeAreaView, ScrollView, ActivityIndicator, Alert } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import theme from '../constants/theme';
 import { preferencesService } from '../services/preferences.service';
+import { authService } from '../services/auth.service';
 
 const WelcomeScreen = ({ navigation }: any) => {
   const [isLoadingLocation, setIsLoadingLocation] = useState(false);
+  const [checkingSession, setCheckingSession] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const user = await authService.restoreSession();
+      if (cancelled) return;
+      if (user) {
+        navigation.replace(user.role === 'business_owner' ? 'BusinessFlow' : 'MainFlow');
+      } else {
+        setCheckingSession(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [navigation]);
+
 
   const handleUseMyLocation = async () => {
     setIsLoadingLocation(true);
@@ -37,6 +56,13 @@ const WelcomeScreen = ({ navigation }: any) => {
       setIsLoadingLocation(false);
     }
   };
+    if (checkingSession) {
+    return (
+      <SafeAreaView style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator size="large" color={theme.COLORS.primary} />
+      </SafeAreaView>
+    );
+  }
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent} bounces={false}>
@@ -105,7 +131,7 @@ const WelcomeScreen = ({ navigation }: any) => {
           </View>
 
           {/* Butonlar */}
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.primaryButton}
             onPress={handleUseMyLocation}
             disabled={isLoadingLocation}
@@ -120,7 +146,7 @@ const WelcomeScreen = ({ navigation }: any) => {
             )}
           </TouchableOpacity>
 
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.secondaryButton}
             onPress={() => navigation.navigate('LocationPicker')}
           >
