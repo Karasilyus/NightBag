@@ -38,6 +38,10 @@ services:
       DATABASE_URL: postgres://nightbag:nightbag@db:5432/nightbag?sslmode=disable
       PORT: "8080"
       CORS_ORIGIN: "*"
+      AUTH_SECRET: "dev-secret-degistir"
+      ALLOW_USER_ID_HEADER: "true"   # frontend Bearer token'a geçince "false" yapın
+      SEED_PASSWORD: "nightbag123"   # musteri@nightbag.com ve elif@modafirini.com için
+      DEMO_DATA: "true"              # her başlangıçta bugüne ait demo ilan ekler
     ports:
       - "8080:8080"
     healthcheck:

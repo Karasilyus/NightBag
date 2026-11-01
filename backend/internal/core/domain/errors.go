@@ -12,4 +12,7 @@ var (
 	ErrInsufficientStock   = errors.New("yeterli çanta kalmadı")
 	ErrPickupWindowPassed  = errors.New("teslim alma saati geçti")
 	ErrNotCancellable      = errors.New("bu rezervasyon iptal edilemez")
+	ErrEmailTaken          = errors.New("bu e-posta adresi zaten kayıtlı")
+	ErrInvalidCredentials  = errors.New("e-posta veya şifre hatalı")
+	ErrBusinessNotFound    = errors.New("işletme bulunamadı")
 )

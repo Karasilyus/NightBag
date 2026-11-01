@@ -43,7 +43,7 @@ func (s *BagService) NearbyListings(ctx context.Context, f domain.NearbyFilter) 
 		f.RadiusM = 50000
 	}
 	if f.Category != "" && !f.Category.Valid() {
-		return nil, invalid("kategori firin, kafe veya yemek olmalı")
+		return nil, invalid("kategori firin, kafe, tatli veya yemek olmalı")
 	}
 	if f.Limit <= 0 || f.Limit > 100 {
 		f.Limit = 50
@@ -64,7 +64,7 @@ func (s *BagService) CreateListing(ctx context.Context, in domain.CreateListingI
 	case in.Title == "":
 		return nil, invalid("başlık zorunlu")
 	case !in.Category.Valid():
-		return nil, invalid("kategori firin, kafe veya yemek olmalı")
+		return nil, invalid("kategori firin, kafe, tatli veya yemek olmalı")
 	case in.OriginalValue <= 0:
 		return nil, invalid("tahmini değer 0'dan büyük olmalı")
 	case in.Price <= 0 || in.Price > in.OriginalValue:

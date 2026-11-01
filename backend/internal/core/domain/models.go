@@ -8,11 +8,12 @@ const (
 	CategoryFirin BagCategory = "firin"
 	CategoryKafe  BagCategory = "kafe"
 	CategoryYemek BagCategory = "yemek"
+	CategoryTatli BagCategory = "tatli"
 )
 
 func (c BagCategory) Valid() bool {
 	switch c {
-	case CategoryFirin, CategoryKafe, CategoryYemek:
+	case CategoryFirin, CategoryKafe, CategoryYemek, CategoryTatli:
 		return true
 	}
 	return false

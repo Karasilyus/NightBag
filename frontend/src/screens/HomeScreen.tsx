@@ -5,7 +5,7 @@ import theme from '../constants/theme';
 import SurpriseBagCard from '../components/SurpriseBagCard';
 import { bagService } from '../services/bag.service';
 
-const CATEGORIES = ['Tümü', 'Fırın', 'Kafe', 'Yemek'];
+const CATEGORIES = ['Tümü', 'Fırın', 'Kafe', 'Tatlı', 'Yemek'];
 
 const HomeScreen = ({ navigation }: any) => {
   const [activeCategory, setActiveCategory] = useState('Tümü');

@@ -1,19 +1,12 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-
+import { apiClient } from './api';
 // NOT: Backend'de henüz auth endpoint'i bulunmuyor.
 // Şu an kimlik doğrulama X-User-ID header'ı ile yapılıyor (geçici).
 // Backend'e auth modülü eklendiğinde bu dosya güncellenecek.
 // Şu an kayıt/giriş işlemleri AsyncStorage'da mock olarak tutuluyor,
 // ancak user.id olarak backend'in beklediği UUID formatı kullanılıyor.
 
-const generateUUID = (): string => {
-  // Basit UUID v4 üreteci (crypto.randomUUID olmadığında)
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-    const r = Math.random() * 16 | 0;
-    const v = c === 'x' ? r : (r & 0x3 | 0x8);
-    return v.toString(16);
-  });
-};
+
 
 export const authService = {
   login: async (credentials: any) => {
@@ -56,13 +49,17 @@ export const authService = {
             return reject(new Error('Bu e-posta adresi zaten kayıtlı!'));
           }
 
-          // Backend UUID formatı kullanılıyor ki X-User-ID header'ında kabul edilsin
+                   const res = await apiClient.post('/auth/register', {
+            full_name: userData.fullName,
+            email: userData.email,
+          });
+
           const newUser = {
-            id: generateUUID(),
+            id: res.data.id,
             fullName: userData.fullName,
             email: userData.email,
-            password: userData.password, // Sadece lokal mock, backend'e gönderilmiyor
-            role: userData.role || 'customer',
+            password: userData.password,
+            role: res.data.role || 'customer',
           };
 
           users.push(newUser);
@@ -70,8 +67,8 @@ export const authService = {
           await AsyncStorage.setItem('currentUser', JSON.stringify(newUser));
 
           resolve({ data: { token: 'placeholder-token', user: newUser } });
-        } catch {
-          reject(new Error('Kayıt olurken bir sorun oluştu.'));
+                } catch (e: any) {
+          reject(new Error(e?.response?.data?.error || 'Kayıt olurken bir sorun oluştu. Sunucuya ulaşılamıyor olabilir.'));
         }
       }, 500);
     });

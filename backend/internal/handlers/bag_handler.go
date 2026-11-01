@@ -15,17 +15,22 @@ import (
 var uuidRe = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
 
 type BagHandler struct {
-	svc *services.BagService
+	svc     *services.BagService
+	authSvc *services.AuthService
 }
 
-func NewBagHandler(svc *services.BagService) *BagHandler {
-	return &BagHandler{svc: svc}
+func NewBagHandler(svc *services.BagService, authSvc *services.AuthService) *BagHandler {
+	return &BagHandler{svc: svc, authSvc: authSvc}
 }
 
 func (h *BagHandler) Register(mux *http.ServeMux) {
 	// Herkese açık
 	mux.HandleFunc("GET /api/v1/listings/nearby", h.nearby)
 	mux.HandleFunc("GET /api/v1/listings/{id}", h.getListing)
+
+	// Kimlik doğrulama
+	mux.HandleFunc("POST /api/v1/auth/register", h.register)
+	mux.HandleFunc("POST /api/v1/auth/login", h.login)
 
 	// Müşteri
 	mux.HandleFunc("GET /api/v1/users/me/stats", h.auth(h.getUserStats))
@@ -41,19 +46,20 @@ func (h *BagHandler) Register(mux *http.ServeMux) {
 
 	mux.HandleFunc("POST /api/v1/business/{businessID}/listings", h.auth(h.createListing))
 	mux.HandleFunc("GET /api/v1/business/overview", h.auth(h.overview))
+	mux.HandleFunc("GET /api/v1/business/me", h.auth(h.myBusiness))
 	mux.HandleFunc("GET /api/v1/business/reservations", h.auth(h.businessReservations))
 	mux.HandleFunc("POST /api/v1/business/pickups", h.auth(h.completePickup))
 }
 
 // ---------- yardımcılar ----------
 
-// auth: GEÇİCİ kimlik doğrulama. İstemci X-User-ID başlığında kullanıcı UUID'sini gönderir.
-// Gerçek uygulamada JWT / oturum doğrulamasıyla değiştirin.
+// auth: Authorization: Bearer <token> başlığını doğrular.
+// ALLOW_USER_ID_HEADER=true ise (sadece geliştirme) eski X-User-ID başlığı da kabul edilir.
 func (h *BagHandler) auth(next func(http.ResponseWriter, *http.Request, string)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		uid := r.Header.Get("X-User-ID")
-		if !uuidRe.MatchString(uid) {
-			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "geçerli X-User-ID başlığı gerekli"})
+		uid, ok := h.authSvc.UserID(r)
+		if !ok {
+			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "giriş yapmanız gerekiyor"})
 			return
 		}
 		next(w, r, uid)
@@ -85,8 +91,12 @@ func writeError(w http.ResponseWriter, err error) {
 		status, msg = http.StatusBadRequest, err.Error()
 	case errors.Is(err, domain.ErrNotFound), errors.Is(err, domain.ErrReservationNotFound):
 		status, msg = http.StatusNotFound, err.Error()
-	case errors.Is(err, domain.ErrUserNotFound):
+	case errors.Is(err, domain.ErrUserNotFound), errors.Is(err, domain.ErrInvalidCredentials):
 		status, msg = http.StatusUnauthorized, err.Error()
+	case errors.Is(err, domain.ErrBusinessNotFound):
+		status, msg = http.StatusNotFound, err.Error()
+	case errors.Is(err, domain.ErrEmailTaken):
+		status, msg = http.StatusConflict, err.Error()
 	case errors.Is(err, domain.ErrForbidden):
 		status, msg = http.StatusForbidden, err.Error()
 	case errors.Is(err, domain.ErrListingNotAvailable),

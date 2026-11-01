@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -122,7 +123,7 @@ func (r *BagRepository) CreateListing(ctx context.Context, in domain.CreateListi
 		$8::numeric, $9::numeric, $10::int, $10::int,
 		$11::date, $12::time, $13::time, $14::text, 'published'::listing_status, now()
 	FROM businesses b
-	WHERE b.id = $1 AND b.owner_id = $2 AND b.is_active AND b.category = $4::text::bag_category
+	WHERE b.id = $1 AND b.owner_id = $2 AND b.is_active
 	RETURNING id::text`
 
 	var id string
@@ -417,6 +418,13 @@ func (r *BagRepository) AddFavorite(ctx context.Context, userID, businessID stri
 	_, err := r.pool.Exec(ctx, `
         INSERT INTO favorite_businesses (user_id, business_id) 
         VALUES ($1, $2) ON CONFLICT DO NOTHING`, userID, businessID)
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.Code == "23503" {
+		if strings.Contains(pgErr.ConstraintName, "business") {
+			return domain.ErrBusinessNotFound
+		}
+		return domain.ErrUserNotFound
+	}
 	return err
 }
 
@@ -444,6 +452,7 @@ func (r *BagRepository) ListFavoriteListings(ctx context.Context, userID string)
 	q := listingSelect("NULL::float8") + `
         JOIN favorite_businesses fb ON fb.business_id = b.id
         WHERE fb.user_id = $1 AND l.status = 'published' AND l.quantity_remaining > 0
+		 AND (l.pickup_date + l.pickup_end) > (now() AT TIME ZONE 'Europe/Istanbul')
         ORDER BY l.pickup_date ASC, l.pickup_end ASC`
 
 	rows, err := r.pool.Query(ctx, q, userID)

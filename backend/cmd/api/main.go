@@ -35,7 +35,7 @@ func withCORS(origin string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", origin)
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-User-ID")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)
 			return
@@ -51,6 +51,15 @@ func main() {
 	dbURL := getenv("DATABASE_URL", "postgres://nightbag:nightbag@localhost:5432/nightbag?sslmode=disable")
 	port := getenv("PORT", "8080")
 	corsOrigin := getenv("CORS_ORIGIN", "*")
+	authSecret := getenv("AUTH_SECRET", "")
+	allowHeader := getenv("ALLOW_USER_ID_HEADER", "false") == "true"
+	if authSecret == "" {
+		authSecret = "dev-secret-degistir"
+		log.Println("UYARI: AUTH_SECRET tanımlı değil, geliştirme anahtarı kullanılıyor")
+	}
+	if allowHeader {
+		log.Println("UYARI: ALLOW_USER_ID_HEADER=true (güvensiz, sadece geliştirme için)")
+	}
 
 	pool, err := database.NewPool(ctx, dbURL)
 	if err != nil {
@@ -79,7 +88,19 @@ func main() {
 
 	repo := repository.NewBagRepository(pool)
 	svc := services.NewBagService(repo)
-	bagHandler := handlers.NewBagHandler(svc)
+	authSvc := services.NewAuthService(repo, authSecret, allowHeader)
+	bagHandler := handlers.NewBagHandler(svc, authSvc)
+
+	if pw := getenv("SEED_PASSWORD", ""); pw != "" {
+		if err := authSvc.EnsureSeedPasswords(ctx, pw); err != nil {
+			log.Printf("seed şifreleri: %v", err)
+		}
+	}
+	if getenv("DEMO_DATA", "false") == "true" {
+		if err := database.EnsureDemoListing(ctx, pool); err != nil {
+			log.Printf("demo ilan: %v", err)
+		}
+	}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
