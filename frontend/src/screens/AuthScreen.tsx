@@ -1,61 +1,66 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, TextInput, KeyboardAvoidingView, Platform, ScrollView, ActivityIndicator, Alert } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, TextInput, KeyboardAvoidingView, Platform, ScrollView, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import * as Location from 'expo-location';
 import theme from '../constants/theme';
 import { authService } from '../services/auth.service';
+import { preferencesService } from '../services/preferences.service';
+import { checkPasswordBreach, getPasswordStrengthScore } from '../services/password-security.service';
 
 const BUSINESS_CATEGORIES = [
-  { value: 'firin', label: 'Fırın', icon: 'restaurant-outline' as const },
-  { value: 'kafe', label: 'Kafe', icon: 'cafe-outline' as const },
-  { value: 'tatli', label: 'Tatlı', icon: 'ice-cream-outline' as const },
-  { value: 'yemek', label: 'Yemek', icon: 'fast-food-outline' as const },
+  { value: 'bakery', label: 'Fırın', apiCategory: 'firin', icon: 'restaurant-outline' as const },
+  { value: 'pastry', label: 'Pastane', apiCategory: 'tatli', icon: 'ice-cream-outline' as const },
+  { value: 'dessert', label: 'Tatlıcı', apiCategory: 'tatli', icon: 'ice-cream-outline' as const },
+  { value: 'cafe', label: 'Kafe', apiCategory: 'kafe', icon: 'cafe-outline' as const },
+  { value: 'tea-house', label: 'Çay evi', apiCategory: 'kafe', icon: 'cafe-outline' as const },
+  { value: 'restaurant', label: 'Restoran', apiCategory: 'yemek', icon: 'restaurant-outline' as const },
+  { value: 'fast-food', label: 'Hızlı yemek', apiCategory: 'yemek', icon: 'fast-food-outline' as const },
+  { value: 'market', label: 'Market', apiCategory: 'yemek', icon: 'basket-outline' as const },
+  { value: 'produce', label: 'Manav', apiCategory: 'yemek', icon: 'nutrition-outline' as const },
+  { value: 'deli', label: 'Şarküteri', apiCategory: 'yemek', icon: 'fast-food-outline' as const },
+  { value: 'butcher', label: 'Kasap', apiCategory: 'yemek', icon: 'fast-food-outline' as const },
+  { value: 'other', label: 'Diğer', apiCategory: 'yemek', icon: 'ellipsis-horizontal-circle-outline' as const },
 ];
-const showMessage = (title: string, message: string) => {
-  if (Platform.OS === 'web') {
-    window.alert(`${title}\n\n${message}`);
-  } else {
-    Alert.alert(title, message);
-  }
-};
 const AuthScreen = ({ navigation }: any) => {
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [isPasswordVisible, setIsPasswordVisible] = useState(false);
+  const [isConfirmPasswordVisible, setIsConfirmPasswordVisible] = useState(false);
+  const [passwordBreachStatus, setPasswordBreachStatus] = useState<'idle' | 'safe' | 'breached'>('idle');
   const [fullName, setFullName] = useState('');
   const [accountType, setAccountType] = useState<'customer' | 'business_owner'>('customer');
   const [businessName, setBusinessName] = useState('');
-  const [businessCategory, setBusinessCategory] = useState('firin');
+  const [businessCategory, setBusinessCategory] = useState('bakery');
   const [businessAddress, setBusinessAddress] = useState('');
   const [businessDistrict, setBusinessDistrict] = useState('');
   const [businessLatitude, setBusinessLatitude] = useState<number | null>(null);
   const [businessLongitude, setBusinessLongitude] = useState<number | null>(null);
-  const [isGettingLocation, setIsGettingLocation] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
-  const handleUseCurrentLocation = async () => {
-    setIsGettingLocation(true);
-    try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Konum izni gerekli', 'İşletme konumunu eklemek için konum izni vermeniz veya koordinatları elle girmeniz gerekir.');
-        return;
-      }
+  const passwordStrengthScore = password ? getPasswordStrengthScore(password) : 0;
+  const passwordStrengthLabel = ['Çok zayıf', 'Zayıf', 'Orta', 'Güçlü', 'Çok güçlü'][passwordStrengthScore];
 
-      const location = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Balanced,
-      });
-      setBusinessLatitude(location.coords.latitude);
-      setBusinessLongitude(location.coords.longitude);
-    } catch (error) {
-      console.error('İşletme konumu alınamadı:', error);
-      Alert.alert('Konum alınamadı', 'Konum bilgisi alınamadı. Koordinatları elle girebilirsiniz.');
-    } finally {
-      setIsGettingLocation(false);
-    }
-  };
+  useEffect(() => {
+    const loadBusinessLocation = () => {
+      preferencesService.takeBusinessRegistrationLocation()
+        .then((location) => {
+          if (location) {
+            setBusinessLatitude(location.latitude);
+            setBusinessLongitude(location.longitude);
+          }
+        })
+        .catch((error) => {
+          console.error('İşletme konumu yüklenemedi:', error);
+          setErrorMsg('İşletme konumu yüklenemedi. Haritadan tekrar seçin.');
+        });
+    };
 
-   const handleAuth = async () => {
+    loadBusinessLocation();
+    return navigation.addListener('focus', loadBusinessLocation);
+  }, [navigation]);
+
+  const handleAuth = async () => {
     setErrorMsg('');
 
     if (!email.trim() || !password || (!isLogin && !fullName.trim())) {
@@ -63,9 +68,19 @@ const AuthScreen = ({ navigation }: any) => {
       return;
     }
 
-    if (!isLogin && password.length < 8) {
-      setErrorMsg('Şifre en az 8 karakter olmalı.');
-      return;
+    if (!isLogin) {
+      if (password.length < 8) {
+        setErrorMsg('Şifre en az 8 karakter olmalı.');
+        return;
+      }
+      if (passwordStrengthScore < 3) {
+        setErrorMsg('Daha güçlü bir şifre seçin. Şifre gücü en az “Güçlü” olmalı.');
+        return;
+      }
+      if (password !== confirmPassword) {
+        setErrorMsg('Şifreler eşleşmiyor.');
+        return;
+      }
     }
 
     if (!isLogin && accountType === 'business_owner') {
@@ -73,27 +88,37 @@ const AuthScreen = ({ navigation }: any) => {
         setErrorMsg('İşletme adı, adresi ve ilçesi zorunludur.');
         return;
       }
-      if (
-        businessLatitude === null
-        || businessLongitude === null
-        || !Number.isFinite(businessLatitude)
-        || !Number.isFinite(businessLongitude)
-        || businessLatitude < -90
-        || businessLatitude > 90
-        || businessLongitude < -180
-        || businessLongitude > 180
-      ) {
-        setErrorMsg('İşletme konumu gerekli: konumunuzu kullanın veya enlem ve boylamı elle girin.');
-        return;
-      }
     }
 
+    if (!isLogin && accountType === 'business_owner' && (
+      businessLatitude === null
+      || businessLongitude === null
+      || !Number.isFinite(businessLatitude)
+      || !Number.isFinite(businessLongitude)
+      || businessLatitude < -90
+      || businessLatitude > 90
+      || businessLongitude < -180
+      || businessLongitude > 180
+    )) {
+      setErrorMsg('İşletme konumunu haritadan seçin.');
+      return;
+    }
+
+    let breachCheckCompleted = isLogin;
     setIsLoading(true);
     try {
       let result;
       if (isLogin) {
         result = await authService.login({ email: email.trim(), password });
       } else {
+        const breachCount = await checkPasswordBreach(password);
+        if (breachCount > 0) {
+          setPasswordBreachStatus('breached');
+          setErrorMsg('Bu şifre daha önce veri sızıntılarında görülmüş. Lütfen başka bir şifre seçin.');
+          return;
+        }
+        breachCheckCompleted = true;
+        setPasswordBreachStatus('safe');
         result = await authService.register({
           email: email.trim(),
           password,
@@ -102,7 +127,7 @@ const AuthScreen = ({ navigation }: any) => {
           business: accountType === 'business_owner'
             ? {
                 name: businessName.trim(),
-                category: businessCategory,
+                category: BUSINESS_CATEGORIES.find((category) => category.value === businessCategory)?.apiCategory || 'yemek',
                 address: businessAddress.trim(),
                 district: businessDistrict.trim(),
                 lat: businessLatitude!,
@@ -115,7 +140,14 @@ const AuthScreen = ({ navigation }: any) => {
       const role = result.data.user.role;
       navigation.replace(role === 'business_owner' ? 'BusinessFlow' : 'MainFlow');
     } catch (error: any) {
-      setErrorMsg(error.response?.data?.error || error.message || 'Bir sorun oluştu.');
+      if (isLogin) {
+        setErrorMsg('Giriş başarısız. E-posta veya şifrenizi kontrol edin.');
+      } else if (!breachCheckCompleted) {
+        console.error('Şifre güvenlik kontrolü tamamlanamadı:', error);
+        setErrorMsg('Sızdırılmış şifre kontrolü yapılamadı. Bağlantınızı kontrol edip tekrar deneyin.');
+      } else {
+        setErrorMsg(error.response?.data?.error || error.message || 'Kayıt sırasında bir sorun oluştu.');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -263,42 +295,16 @@ const AuthScreen = ({ navigation }: any) => {
                       </View>
                       <TouchableOpacity
                         style={styles.locationButton}
-                        onPress={handleUseCurrentLocation}
-                        disabled={isGettingLocation}
+                        onPress={() => navigation.navigate('LocationPicker', { returnToBusiness: true })}
                         accessibilityRole="button"
                       >
-                        {isGettingLocation
-                          ? <ActivityIndicator size="small" color={theme.COLORS.primary} />
-                          : <Ionicons name="locate-outline" size={17} color={theme.COLORS.primary} />}
-                        <Text style={styles.locationButtonText}>Konumumu kullan</Text>
+                        <Ionicons name={businessLatitude === null ? 'map-outline' : 'checkmark-circle-outline'} size={17} color={theme.COLORS.primary} />
+                        <Text style={styles.locationButtonText}>{businessLatitude === null ? 'Haritadan seç' : 'Konum seçildi'}</Text>
                       </TouchableOpacity>
                     </View>
-                    <View style={styles.coordinateRow}>
-                      <View style={[styles.coordinateInputGroup, styles.coordinateInputSpacing]}>
-                        <Text style={styles.coordinateLabel}>Enlem</Text>
-                        <TextInput
-                          style={styles.input}
-                          placeholder="40.9845"
-                          placeholderTextColor={theme.COLORS.textSecondary}
-                          value={businessLatitude === null ? '' : String(businessLatitude)}
-                          onChangeText={(value) => setBusinessLatitude(value.trim() ? Number(value.replace(',', '.')) : null)}
-                          keyboardType="decimal-pad"
-                          accessibilityLabel="İşletme enlemi"
-                        />
-                      </View>
-                      <View style={styles.coordinateInputGroup}>
-                        <Text style={styles.coordinateLabel}>Boylam</Text>
-                        <TextInput
-                          style={styles.input}
-                          placeholder="29.0260"
-                          placeholderTextColor={theme.COLORS.textSecondary}
-                          value={businessLongitude === null ? '' : String(businessLongitude)}
-                          onChangeText={(value) => setBusinessLongitude(value.trim() ? Number(value.replace(',', '.')) : null)}
-                          keyboardType="decimal-pad"
-                          accessibilityLabel="İşletme boylamı"
-                        />
-                      </View>
-                    </View>
+                    <Text style={styles.locationHelp}>
+                      {businessLatitude === null ? 'Konum bilgisi kayıt için gereklidir.' : 'Konum kayıt sırasında güvenli biçimde gönderilir.'}
+                    </Text>
                   </View>
                 )}
               </>
@@ -319,20 +325,57 @@ const AuthScreen = ({ navigation }: any) => {
 
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Şifre</Text>
-              <TextInput 
-                style={styles.input} 
-                placeholder="Şifre" 
-                secureTextEntry 
-                placeholderTextColor={theme.COLORS.textSecondary} 
-                value={password}
-                onChangeText={setPassword}
-              />
+              <View style={styles.passwordInputWrapper}>
+                <TextInput
+                  style={styles.passwordInput}
+                  placeholder="Şifre"
+                  secureTextEntry={!isPasswordVisible}
+                  placeholderTextColor={theme.COLORS.textSecondary}
+                  value={password}
+                  onChangeText={(value) => {
+                    setPassword(value);
+                    setPasswordBreachStatus('idle');
+                  }}
+                  autoCapitalize="none"
+                  accessibilityLabel="Şifre"
+                />
+                <TouchableOpacity onPress={() => setIsPasswordVisible((visible) => !visible)} accessibilityRole="button" accessibilityLabel={isPasswordVisible ? 'Şifreyi gizle' : 'Şifreyi göster'}>
+                  <Ionicons name={isPasswordVisible ? 'eye-off-outline' : 'eye-outline'} size={21} color={theme.COLORS.textSecondary} />
+                </TouchableOpacity>
+              </View>
+              {!isLogin && password ? (
+                <Text style={styles.passwordHint}>
+                  Şifre gücü: {passwordStrengthLabel}
+                  {passwordBreachStatus === 'safe' ? ' • Sızıntı kontrolü temiz' : ''}
+                  {passwordBreachStatus === 'breached' ? ' • Sızdırılmış' : ''}
+                </Text>
+              ) : null}
+              {!isLogin && (
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>Şifre tekrarı</Text>
+                  <View style={styles.passwordInputWrapper}>
+                    <TextInput
+                      style={styles.passwordInput}
+                      placeholder="Şifreni tekrar gir"
+                      secureTextEntry={!isConfirmPasswordVisible}
+                      placeholderTextColor={theme.COLORS.textSecondary}
+                      value={confirmPassword}
+                      onChangeText={setConfirmPassword}
+                      autoCapitalize="none"
+                      accessibilityLabel="Şifre tekrarı"
+                    />
+                    <TouchableOpacity onPress={() => setIsConfirmPasswordVisible((visible) => !visible)} accessibilityRole="button" accessibilityLabel={isConfirmPasswordVisible ? 'Şifreyi gizle' : 'Şifreyi göster'}>
+                      <Ionicons name={isConfirmPasswordVisible ? 'eye-off-outline' : 'eye-outline'} size={21} color={theme.COLORS.textSecondary} />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
             </View>
 
             {isLogin && (
               <TouchableOpacity
                 style={styles.forgotPasswordBtn}
-                onPress={() => Alert.alert('Şifremi unuttum', 'Şifre sıfırlama için backend kimlik doğrulama uç noktası gereklidir.')}
+                onPress={() => navigation.navigate('PasswordReset', { initialEmail: email.trim() })}
               >
                 <Text style={styles.forgotPasswordText}>Şifremi unuttum</Text>
               </TouchableOpacity>
@@ -385,6 +428,9 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: theme.SIZES.l,
+    width: '100%',
+    maxWidth: 640,
+    alignSelf: 'center',
   },
   title: {
     ...theme.FONTS.h1,
@@ -544,20 +590,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: theme.COLORS.primary,
   },
-  coordinateRow: {
-    flexDirection: 'row',
-  },
-  coordinateInputGroup: {
-    flex: 1,
-  },
-  coordinateInputSpacing: {
-    marginRight: theme.SIZES.s,
-  },
-  coordinateLabel: {
-    ...theme.FONTS.caption,
-    color: theme.COLORS.textSecondary,
-    marginBottom: theme.SIZES.xs,
-  },
   inputGroup: {
     marginBottom: theme.SIZES.m,
   },
@@ -576,6 +608,28 @@ const styles = StyleSheet.create({
     height: 52,
     ...theme.FONTS.body1,
     color: theme.COLORS.text,
+  },
+  passwordInputWrapper: {
+    minHeight: 52,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: theme.COLORS.background,
+    borderWidth: 1,
+    borderColor: theme.COLORS.border,
+    borderRadius: theme.SIZES.radius,
+    paddingHorizontal: theme.SIZES.m,
+  },
+  passwordInput: {
+    flex: 1,
+    height: 50,
+    ...theme.FONTS.body1,
+    color: theme.COLORS.text,
+  },
+  passwordHint: {
+    ...theme.FONTS.caption,
+    color: theme.COLORS.primary,
+    marginTop: -theme.SIZES.s,
+    marginBottom: theme.SIZES.m,
   },
   forgotPasswordBtn: {
     alignSelf: 'flex-end',
@@ -646,7 +700,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: theme.COLORS.primary,
   },
-    errorText: {
+  errorText: {
     color: '#C62828',
     fontSize: 14,
     marginBottom: 12,

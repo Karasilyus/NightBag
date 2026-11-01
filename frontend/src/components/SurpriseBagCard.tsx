@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, Image, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, Image, TouchableOpacity, Alert, ViewStyle } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import theme from '../constants/theme';
@@ -16,6 +16,8 @@ interface SurpriseBagCardProps {
   imageUrl: string;
   remainingBags: number;
   isMapCard?: boolean; // Harita sayfasındaki yatay kartlar için
+  webGrid?: boolean;
+  gridWidth?: ViewStyle['width'];
 }
 
 const SurpriseBagCard: React.FC<SurpriseBagCardProps> = (props) => {
@@ -29,6 +31,8 @@ const SurpriseBagCard: React.FC<SurpriseBagCardProps> = (props) => {
     imageUrl,
     remainingBags,
     isMapCard = false,
+    webGrid = false,
+    gridWidth = '48%',
   } = props;
   const navigation = useNavigation<any>();
   const [isSaved, setIsSaved] = React.useState(false);
@@ -70,7 +74,7 @@ const SurpriseBagCard: React.FC<SurpriseBagCardProps> = (props) => {
 
   return (
     <TouchableOpacity 
-      style={[styles.card, isMapCard && styles.mapCard]}
+      style={[styles.card, webGrid && { width: gridWidth }, isMapCard && styles.mapCard]}
       onPress={() => navigation.navigate('BagDetails', { bag: { id: props.id, businessName, bagType, distance, timeInfo, price, originalPrice, imageUrl, remainingBags } })}
     >
       <View style={styles.imageContainer}>

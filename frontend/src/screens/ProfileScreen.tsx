@@ -5,6 +5,8 @@ import theme from '../constants/theme';
 import { authService } from '../services/auth.service';
 import { preferencesService, UserPreferences } from '../services/preferences.service';
 
+const PERSONALIZATION_CATEGORIES = ['Fırın', 'Kafe', 'Tatlı', 'Yemek'];
+
 const ProfileScreen = ({ navigation }: any) => {
   const [user, setUser] = useState({ 
     fullName: 'Misafir', 
@@ -18,8 +20,9 @@ const ProfileScreen = ({ navigation }: any) => {
     searchRadiusKm: 5,
     notificationsEnabled: true,
     location: null,
+    favoriteCategories: [],
   });
-  const [activeModal, setActiveModal] = useState<'edit' | 'location' | 'privacy' | 'help' | null>(null);
+  const [activeModal, setActiveModal] = useState<'edit' | 'location' | 'personalization' | 'privacy' | 'help' | null>(null);
   const [editedName, setEditedName] = useState('');
   const [isSavingName, setIsSavingName] = useState(false);
   const [supportError, setSupportError] = useState('');
@@ -27,6 +30,9 @@ const ProfileScreen = ({ navigation }: any) => {
   const canAccessBusinessPanel = user.role === 'business_owner'
     && Boolean(user.business_id)
     && Boolean(user.email.trim());
+  const favoritePlaces = Array.from(new Map(
+    user.savedBusinesses.map((savedBag) => [savedBag.name, savedBag])
+  ).values());
 
   useEffect(() => {
     const loadUser = async () => {
@@ -101,6 +107,19 @@ const ProfileScreen = ({ navigation }: any) => {
     } catch (error) {
       console.error('Arama mesafesi kaydedilemedi:', error);
       setSettingsError('Arama mesafesi kaydedilemedi. Lütfen tekrar deneyin.');
+    }
+  };
+
+  const toggleFavoriteCategory = async (category: string) => {
+    const favoriteCategories = preferences.favoriteCategories.includes(category)
+      ? preferences.favoriteCategories.filter((item) => item !== category)
+      : [...preferences.favoriteCategories, category];
+    try {
+      setPreferences(await preferencesService.updatePreferences({ favoriteCategories }));
+      setSettingsError('');
+    } catch (error) {
+      console.error('Kişiselleştirme tercihleri kaydedilemedi:', error);
+      setSettingsError('Kişiselleştirme tercihleri kaydedilemedi. Lütfen tekrar deneyin.');
     }
   };
 
@@ -224,6 +243,26 @@ const ProfileScreen = ({ navigation }: any) => {
             <Ionicons name="chevron-forward" size={16} color={theme.COLORS.textSecondary} />
           </TouchableOpacity>
 
+          <TouchableOpacity style={styles.menuItem} onPress={() => setActiveModal('personalization')} accessibilityRole="button">
+            <View style={styles.menuLeft}>
+              <Ionicons name="sparkles-outline" size={20} color={theme.COLORS.textSecondary} />
+              <Text style={styles.menuText}>Keşfet tercihleri</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color={theme.COLORS.textSecondary} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.menuItem}
+            onPress={() => navigation.navigate('PasswordReset', { initialEmail: user.email })}
+            accessibilityRole="button"
+          >
+            <View style={styles.menuLeft}>
+              <Ionicons name="key-outline" size={20} color={theme.COLORS.textSecondary} />
+              <Text style={styles.menuText}>Şifre değiştir</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color={theme.COLORS.textSecondary} />
+          </TouchableOpacity>
+
           <TouchableOpacity style={[styles.menuItem, { borderBottomWidth: 0 }]} onPress={() => {
             setSupportError('');
             setActiveModal('help');
@@ -235,6 +274,25 @@ const ProfileScreen = ({ navigation }: any) => {
             <Ionicons name="chevron-forward" size={16} color={theme.COLORS.textSecondary} />
           </TouchableOpacity>
         </View>
+
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Favori mekanların</Text>
+          <Text style={styles.seeAllText}>{favoritePlaces.length} mekan</Text>
+        </View>
+        <Text style={styles.preferenceNote}>Favori mekanlar, kaydettiğin çantalara göre bu cihazda oluşturulur.</Text>
+        {favoritePlaces.map((place) => (
+          <View key={place.name} style={styles.favCard}>
+            <Image source={{ uri: place.imageUrl }} style={styles.favImage} />
+            <View style={styles.favInfo}>
+              <Text style={styles.favName}>{place.name}</Text>
+              <Text style={styles.favDesc}>{place.type}</Text>
+            </View>
+            <Ionicons name="heart" size={22} color={theme.COLORS.primary} />
+          </View>
+        ))}
+        {favoritePlaces.length === 0 && (
+          <Text style={styles.emptyFavorites}>Bir çantayı kaydederek mekanı favorilerine ekleyebilirsin.</Text>
+        )}
 
         {/* Kaydedilenler */}
         <View style={styles.sectionHeader}>
@@ -296,7 +354,7 @@ const ProfileScreen = ({ navigation }: any) => {
                 <Text style={styles.modalTitle}>Konum ve arama alanı</Text>
                 <Text style={styles.modalDescription}>Yakınındaki çantaları hangi mesafede arayalım?</Text>
                 <View style={styles.radiusOptions}>
-                  {[2, 5, 10, 20].map((radius) => (
+                  {[2, 5, 10, 20, 50].map((radius) => (
                     <TouchableOpacity
                       key={radius}
                       style={[styles.radiusOption, preferences.searchRadiusKm === radius && styles.radiusOptionSelected]}
@@ -314,6 +372,33 @@ const ProfileScreen = ({ navigation }: any) => {
                   navigation.navigate('LocationPicker', { returnToProfile: true });
                 }}>
                   <Text style={styles.modalPrimaryText}>Haritada konumu seç</Text>
+                </TouchableOpacity>
+              </>
+            )}
+
+            {activeModal === 'personalization' && (
+              <>
+                <Text style={styles.modalTitle}>Keşfet tercihleri</Text>
+                <Text style={styles.modalDescription}>İlgilendiğin işletme türlerini seç. Tercihlerin bu cihazda saklanır.</Text>
+                <View style={styles.categoryOptions}>
+                  {PERSONALIZATION_CATEGORIES.map((category) => {
+                    const selected = preferences.favoriteCategories.includes(category);
+                    return (
+                      <TouchableOpacity
+                        key={category}
+                        style={[styles.categoryOption, selected && styles.categoryOptionSelected]}
+                        onPress={() => toggleFavoriteCategory(category)}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected }}
+                      >
+                        <Text style={[styles.categoryOptionText, selected && styles.categoryOptionTextSelected]}>{category}</Text>
+                        {selected ? <Ionicons name="checkmark" size={17} color={theme.COLORS.primary} /> : null}
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+                <TouchableOpacity style={styles.modalPrimaryButton} onPress={() => setActiveModal(null)}>
+                  <Text style={styles.modalPrimaryText}>Tamam</Text>
                 </TouchableOpacity>
               </>
             )}
@@ -374,6 +459,12 @@ const styles = StyleSheet.create({
   menuRight: { flexDirection: 'row', alignItems: 'center', gap: theme.SIZES.s },
   menuValue: { ...theme.FONTS.caption, color: theme.COLORS.textSecondary },
   preferenceNote: { ...theme.FONTS.caption, color: theme.COLORS.textSecondary, paddingBottom: theme.SIZES.m },
+  categoryOptions: { gap: theme.SIZES.s, marginBottom: theme.SIZES.m },
+  categoryOption: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', minHeight: 44, paddingHorizontal: theme.SIZES.m, borderWidth: 1, borderColor: theme.COLORS.border, borderRadius: theme.SIZES.radius },
+  categoryOptionSelected: { borderColor: theme.COLORS.primary, backgroundColor: theme.COLORS.tagBackground },
+  categoryOptionText: { ...theme.FONTS.body2, color: theme.COLORS.text },
+  categoryOptionTextSelected: { color: theme.COLORS.primary, fontWeight: '600' },
+  emptyFavorites: { ...theme.FONTS.caption, color: theme.COLORS.textSecondary, textAlign: 'center', marginBottom: theme.SIZES.l },
   modalBackdrop: { flex: 1, justifyContent: 'center', padding: theme.SIZES.l, backgroundColor: 'rgba(0,0,0,0.35)' },
   modalCard: { alignSelf: 'center', width: '100%', maxWidth: 440, padding: theme.SIZES.l, backgroundColor: theme.COLORS.card, borderRadius: theme.SIZES.cardRadius },
   modalTitle: { ...theme.FONTS.h3, color: theme.COLORS.text, marginBottom: theme.SIZES.m },

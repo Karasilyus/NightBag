@@ -11,16 +11,21 @@ const MapScreen = ({ navigation }: any) => {
   const mapRef = useRef<MapView>(null);
   const [bags, setBags] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [mapCenter, setMapCenter] = useState({ latitude: 40.9845, longitude: 29.0260 });
   const [preferences, setPreferences] = useState<UserPreferences>({
     searchRadiusKm: 5,
     notificationsEnabled: true,
     location: null,
+    favoriteCategories: [],
   });
 
   useEffect(() => {
     const loadPreferences = () => {
       preferencesService.getPreferences()
-        .then(setPreferences)
+        .then((nextPreferences) => {
+          setPreferences(nextPreferences);
+          if (nextPreferences.location) setMapCenter(nextPreferences.location);
+        })
         .catch((error) => console.error('Kullanıcı tercihleri yüklenemedi:', error));
     };
 
@@ -39,14 +44,14 @@ const MapScreen = ({ navigation }: any) => {
   }, [preferences.location?.latitude, preferences.location?.longitude, preferences.searchRadiusKm]);
 
   useEffect(() => {
-    const fetchBags = async () => {
+    const timeout = setTimeout(async () => {
       setIsLoading(true);
       try {
         const response = await bagService.getBags(
           'Tümü',
           '',
-          preferences.location?.latitude,
-          preferences.location?.longitude,
+          mapCenter.latitude,
+          mapCenter.longitude,
           preferences.searchRadiusKm * 1000
         );
         setBags(response.data);
@@ -55,18 +60,28 @@ const MapScreen = ({ navigation }: any) => {
       } finally {
         setIsLoading(false);
       }
-    };
-    fetchBags();
-  }, [preferences]);
+    }, 350);
+    return () => clearTimeout(timeout);
+  }, [mapCenter.latitude, mapCenter.longitude, preferences.searchRadiusKm]);
+
+  const handleRegionChangeComplete = (region: { latitude: number; longitude: number }) => {
+    setMapCenter((currentCenter) => (
+      Math.abs(currentCenter.latitude - region.latitude) < 0.002
+      && Math.abs(currentCenter.longitude - region.longitude) < 0.002
+        ? currentCenter
+        : { latitude: region.latitude, longitude: region.longitude }
+    ));
+  };
 
   return (
     <View style={styles.container}>
       <MapView
         ref={mapRef}
         style={styles.map}
+        onRegionChangeComplete={handleRegionChangeComplete}
         initialRegion={{
-          latitude: preferences.location?.latitude ?? 40.9845,
-          longitude: preferences.location?.longitude ?? 29.0260,
+          latitude: mapCenter.latitude,
+          longitude: mapCenter.longitude,
           latitudeDelta: preferences.searchRadiusKm / 55,
           longitudeDelta: preferences.searchRadiusKm / 55,
         }}

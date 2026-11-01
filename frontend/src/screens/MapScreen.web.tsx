@@ -11,16 +11,21 @@ import { preferencesService, UserPreferences } from '../services/preferences.ser
 const MapScreen = ({ navigation }: any) => {
   const [bags, setBags] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [mapCenter, setMapCenter] = useState({ latitude: 40.9845, longitude: 29.026 });
   const [preferences, setPreferences] = useState<UserPreferences>({
     searchRadiusKm: 5,
     notificationsEnabled: true,
     location: null,
+    favoriteCategories: [],
   });
 
   useEffect(() => {
     const loadPreferences = () => {
       preferencesService.getPreferences()
-        .then(setPreferences)
+        .then((nextPreferences) => {
+          setPreferences(nextPreferences);
+          if (nextPreferences.location) setMapCenter(nextPreferences.location);
+        })
         .catch((error) => console.error('Kullanıcı tercihleri yüklenemedi:', error));
     };
 
@@ -29,14 +34,14 @@ const MapScreen = ({ navigation }: any) => {
   }, [navigation]);
 
   useEffect(() => {
-    const fetchBags = async () => {
+    const timeout = setTimeout(async () => {
       setIsLoading(true);
       try {
         const response = await bagService.getBags(
           'Tümü',
           '',
-          preferences.location?.latitude,
-          preferences.location?.longitude,
+          mapCenter.latitude,
+          mapCenter.longitude,
           preferences.searchRadiusKm * 1000
         );
         setBags(response.data);
@@ -45,16 +50,26 @@ const MapScreen = ({ navigation }: any) => {
       } finally {
         setIsLoading(false);
       }
-    };
-    fetchBags();
-  }, [preferences]);
+    }, 350);
+    return () => clearTimeout(timeout);
+  }, [mapCenter.latitude, mapCenter.longitude, preferences.searchRadiusKm]);
+
+  const handleCenterChange = (nextCenter: { latitude: number; longitude: number }) => {
+    setMapCenter((currentCenter) => (
+      Math.abs(currentCenter.latitude - nextCenter.latitude) < 0.002
+      && Math.abs(currentCenter.longitude - nextCenter.longitude) < 0.002
+        ? currentCenter
+        : nextCenter
+    ));
+  };
 
   return (
     <View style={styles.container}>
       <WebMapCanvas
         style={styles.map}
-        center={preferences.location || undefined}
+        center={mapCenter}
         radiusKm={preferences.searchRadiusKm}
+        onCenterChange={handleCenterChange}
         markers={bags.map((bag) => ({
           id: bag.id,
           coordinate: bag.coordinate,

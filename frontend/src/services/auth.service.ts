@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import axios from 'axios';
 import { apiClient } from './api';
 
 type BusinessRegistration = {
@@ -21,19 +22,23 @@ type AuthResponse = {
   };
 };
 
-
+type StoredUser = AuthResponse['user'] & {
+  fullName: string;
+};
 
 const persistAuthResponse = async (data: AuthResponse) => {
   if (!data.token || !data.user?.id) {
     throw new Error('Sunucudan geçerli bir oturum yanıtı alınamadı.');
   }
 
-  const user = {
+  const user: StoredUser = {
     ...data.user,
     fullName: data.user.full_name,
   };
-  await AsyncStorage.setItem('authToken', data.token);
-  await AsyncStorage.setItem('currentUser', JSON.stringify(user));
+  await AsyncStorage.multiSet([
+    ['authToken', data.token],
+    ['currentUser', JSON.stringify(user)],
+  ]);
   return { data: { token: data.token, user } };
 };
 
@@ -67,7 +72,7 @@ export const authService = {
     try {
       const userJson = await AsyncStorage.getItem('currentUser');
       const user = userJson ? JSON.parse(userJson) : null;
-      if (user) {
+      if (user && typeof user === 'object' && typeof user.id === 'string') {
         return {
           ...user,
           profileStats: {
@@ -78,7 +83,8 @@ export const authService = {
         };
       }
       return null;
-    } catch {
+    } catch (error) {
+      console.error('Yerel kullanıcı bilgisi okunamadı:', error);
       return null;
     }
   },
@@ -98,26 +104,52 @@ export const authService = {
     await AsyncStorage.multiRemove(['currentUser', 'authToken']);
   },
 
-    restoreSession: async () => {
+  restoreSession: async () => {
     const token = await AsyncStorage.getItem('authToken');
     const userJson = await AsyncStorage.getItem('currentUser');
-    if (!token || !userJson) return null;
+    if (!token && !userJson) return null;
+    if (!token || !userJson) {
+      await AsyncStorage.multiRemove(['currentUser', 'authToken']);
+      return null;
+    }
 
-    let user: { role: string } | null = null;
+    let user: StoredUser;
     try {
-      user = JSON.parse(userJson);
+      const parsedUser: unknown = JSON.parse(userJson);
+      if (
+        !parsedUser
+        || typeof parsedUser !== 'object'
+        || !('id' in parsedUser)
+        || typeof parsedUser.id !== 'string'
+        || !('role' in parsedUser)
+        || typeof parsedUser.role !== 'string'
+      ) {
+        throw new Error('Yerel kullanıcı bilgisi geçersiz.');
+      }
+      user = parsedUser as StoredUser;
     } catch {
       await AsyncStorage.multiRemove(['currentUser', 'authToken']);
       return null;
     }
 
     try {
-      await apiClient.get('/users/me'); // token geçersizse 401 → interceptor oturumu siler
-      return user;
-    } catch (error: any) {
-      if (error.response?.status === 401) return null;
-      return user; // ağ hatası: sunucuya ulaşılamıyorsa yerel oturumla devam et
+      const response = await apiClient.get<AuthResponse['user']>('/users/me');
+      const currentUser = response.data;
+      if (!currentUser?.id || !currentUser.role) {
+        throw new Error('Sunucudan geçerli kullanıcı bilgisi alınamadı.');
+      }
+
+      const refreshedUser: StoredUser = {
+        ...user,
+        ...currentUser,
+        fullName: currentUser.full_name || user.fullName,
+        business_id: currentUser.business_id || user.business_id,
+      };
+      await AsyncStorage.setItem('currentUser', JSON.stringify(refreshedUser));
+      return refreshedUser;
+    } catch (error) {
+      if (axios.isAxiosError(error) && error.response?.status === 401) return null;
+      throw new Error('Oturum doğrulanamadı. İnternet bağlantınızı kontrol edip tekrar giriş yapın.');
     }
   },
 };
-

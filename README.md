@@ -42,3 +42,16 @@ with `EXPO_PUBLIC_GOOGLE_MAPS_API_KEY=your-key` to enable it locally. Enable the
 Maps JavaScript API in Google Cloud and restrict the key to your development
 and production website referrers. This key is included in the web bundle, so
 never commit an unrestricted key or put a server-side key here.
+
+## Frontend account and discovery behavior
+
+Registration checks password strength locally with zxcvbn and checks for known
+password leaks through the Have I Been Pwned Pwned Passwords range API. The
+password itself and its full SHA-1 hash are not sent; only the first five
+characters of the hash are used for the range request. Registration requires
+this online check to complete. Password reset/change screens are preparatory
+UI only until the backend provides verified reset and password-change flows.
+
+The discovery distance control covers 2–50 km. The current nearby-listings API
+caps radius at 50 km and returns at most 50 listings, so “Tümü” currently means
+the widest supported search, not every listing globally.

@@ -8,6 +8,7 @@ import { COLORS } from '../constants/theme';
 export type RootStackParamList = {
   Welcome: undefined;
   Auth: undefined;
+  PasswordReset: { initialEmail?: string } | undefined;
   LocationPicker: undefined;
   MainFlow: undefined;
   BusinessFlow: undefined;
@@ -44,6 +45,7 @@ import ProfileScreen from '../screens/ProfileScreen';
 import BusinessDashboardScreen from '../screens/BusinessDashboardScreen';
 import CreateBagScreen from '../screens/CreateBagScreen';
 import AuthScreen from '../screens/AuthScreen';
+import PasswordResetScreen from '../screens/PasswordResetScreen';
 import LocationPickerScreen from '../screens/LocationPickerScreen';
 
 function MainTabNavigator() {
@@ -103,6 +105,7 @@ export default function AppNavigator() {
       >
         <Stack.Screen name="Welcome" component={WelcomeScreen} />
         <Stack.Screen name="Auth" component={AuthScreen} />
+        <Stack.Screen name="PasswordReset" component={PasswordResetScreen} />
         <Stack.Screen name="LocationPicker" component={LocationPickerScreen} />
         <Stack.Screen name="MainFlow" component={MainTabNavigator} />
         <Stack.Screen name="BusinessFlow" component={BusinessTabNavigator} />

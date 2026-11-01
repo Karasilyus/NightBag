@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, SafeAreaView, ActivityIndicator, Modal, Pressable, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, SafeAreaView, ActivityIndicator, Alert, Platform, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import theme from '../constants/theme';
 import SurpriseBagCard from '../components/SurpriseBagCard';
 import { bagService } from '../services/bag.service';
 import { preferencesService, UserPreferences } from '../services/preferences.service';
+import DistanceSlider from '../components/DistanceSlider';
 
 const CATEGORIES = ['Tümü', 'Fırın', 'Kafe', 'Tatlı', 'Yemek'];
 
@@ -17,14 +18,34 @@ const HomeScreen = ({ navigation }: any) => {
     searchRadiusKm: 5,
     notificationsEnabled: true,
     location: null,
+    favoriteCategories: [],
   });
-  const [isFilterVisible, setIsFilterVisible] = useState(false);
+  const { width } = useWindowDimensions();
+  const webGridWidth = width >= 1200 ? '31.5%' : '48%';
+  const displayedBags = activeCategory === 'Tümü' && preferences.favoriteCategories.length > 0
+    ? [
+        ...bags.filter((bag) => preferences.favoriteCategories.includes(bag.category)),
+        ...bags.filter((bag) => !preferences.favoriteCategories.includes(bag.category)),
+      ]
+    : bags;
 
   useEffect(() => {
     preferencesService.getPreferences()
       .then(setPreferences)
       .catch((error) => console.error('Kullanıcı tercihleri yüklenemedi:', error));
   }, []);
+
+  const updateSearchRadius = async (searchRadiusKm: number) => {
+    const previousPreferences = preferences;
+    setPreferences((current) => ({ ...current, searchRadiusKm }));
+    try {
+      setPreferences(await preferencesService.updatePreferences({ searchRadiusKm }));
+    } catch (error) {
+      console.error('Arama mesafesi kaydedilemedi:', error);
+      setPreferences(previousPreferences);
+      Alert.alert('Hata', 'Arama mesafesi kaydedilemedi. Lütfen tekrar deneyin.');
+    }
+  };
 
   useEffect(() => {
     const fetchBags = async () => {
@@ -67,9 +88,6 @@ const HomeScreen = ({ navigation }: any) => {
               <Ionicons name="chevron-down" size={16} color={theme.COLORS.text} />
             </TouchableOpacity>
           </View>
-          <TouchableOpacity style={styles.filterBtn} onPress={() => setIsFilterVisible(true)} accessibilityRole="button" accessibilityLabel="Arama mesafesini ayarla">
-            <Ionicons name="options-outline" size={24} color={theme.COLORS.text} />
-          </TouchableOpacity>
         </View>
       </View>
 
@@ -89,7 +107,7 @@ const HomeScreen = ({ navigation }: any) => {
         </View>
 
         {/* Kategoriler */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoriesContainer}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoriesContainer} contentContainerStyle={styles.categoriesContent}>
           {CATEGORIES.map((category, index) => (
             <TouchableOpacity 
               key={index} 
@@ -101,41 +119,15 @@ const HomeScreen = ({ navigation }: any) => {
               </Text>
             </TouchableOpacity>
           ))}
+          {width >= 700 && (
+            <DistanceSlider key={preferences.searchRadiusKm} value={preferences.searchRadiusKm} onCommit={updateSearchRadius} />
+          )}
         </ScrollView>
-
-        <Modal
-          visible={isFilterVisible}
-          transparent
-          animationType="fade"
-          onRequestClose={() => setIsFilterVisible(false)}
-        >
-          <Pressable style={styles.modalBackdrop} onPress={() => setIsFilterVisible(false)}>
-            <Pressable style={styles.filterModal} onPress={(event) => event.stopPropagation()}>
-              <Text style={styles.filterTitle}>Arama mesafesi</Text>
-              {[2, 5, 10, 20].map((radius) => (
-                <TouchableOpacity
-                  key={radius}
-                  style={styles.radiusOption}
-                  onPress={async () => {
-                    try {
-                      const updated = await preferencesService.updatePreferences({ searchRadiusKm: radius });
-                      setPreferences(updated);
-                      setIsFilterVisible(false);
-                    } catch (error) {
-                      console.error('Arama mesafesi kaydedilemedi:', error);
-                      Alert.alert('Hata', 'Arama mesafesi kaydedilemedi. Lütfen tekrar deneyin.');
-                    }
-                  }}
-                >
-                  <Text style={styles.radiusText}>{radius} km</Text>
-                  {preferences.searchRadiusKm === radius && (
-                    <Ionicons name="checkmark" size={20} color={theme.COLORS.primary} />
-                  )}
-                </TouchableOpacity>
-              ))}
-            </Pressable>
-          </Pressable>
-        </Modal>
+        {width < 700 && (
+          <View style={styles.mobileDistanceSlider}>
+            <DistanceSlider key={preferences.searchRadiusKm} value={preferences.searchRadiusKm} onCommit={updateSearchRadius} />
+          </View>
+        )}
 
         {/* Liste Başlığı */}
         <View style={styles.sectionHeader}>
@@ -147,12 +139,17 @@ const HomeScreen = ({ navigation }: any) => {
         </View>
 
         {/* Kartlar */}
-        <View style={styles.cardsContainer}>
+        <View style={[styles.cardsContainer, Platform.OS === 'web' && width >= 700 && styles.webCardsContainer]}>
           {isLoading ? (
             <ActivityIndicator size="large" color={theme.COLORS.primary} style={{ marginTop: 40 }} />
-          ) : bags.length > 0 ? (
-            bags.map((item) => (
-              <SurpriseBagCard key={item.id} {...item} />
+          ) : displayedBags.length > 0 ? (
+            displayedBags.map((item) => (
+              <SurpriseBagCard
+                key={item.id}
+                {...item}
+                webGrid={Platform.OS === 'web' && width >= 700}
+                gridWidth={webGridWidth}
+              />
             ))
           ) : (
             <View style={styles.emptyContainer}>
@@ -196,12 +193,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: theme.COLORS.text,
   },
-  filterBtn: {
-    padding: 8,
-    borderWidth: 1,
-    borderColor: theme.COLORS.border,
-    borderRadius: 20,
-  },
   scrollContent: {
     paddingHorizontal: theme.SIZES.l,
     paddingBottom: 100, // Bottom tab için boşluk
@@ -229,7 +220,14 @@ const styles = StyleSheet.create({
     color: theme.COLORS.text,
   },
   categoriesContainer: {
+    marginBottom: theme.SIZES.xl,
+  },
+  categoriesContent: {
     flexDirection: 'row',
+    alignItems: 'center',
+  },
+  mobileDistanceSlider: {
+    marginTop: -theme.SIZES.l,
     marginBottom: theme.SIZES.xl,
   },
   categoryBtn: {
@@ -277,6 +275,12 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
     minHeight: 200,
   },
+  webCardsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
   emptyContainer: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -289,11 +293,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: theme.SIZES.m,
   },
-  modalBackdrop: { flex: 1, justifyContent: 'center', padding: theme.SIZES.l, backgroundColor: 'rgba(0,0,0,0.35)' },
-  filterModal: { alignSelf: 'center', width: '100%', maxWidth: 420, padding: theme.SIZES.l, backgroundColor: theme.COLORS.card, borderRadius: theme.SIZES.cardRadius },
-  filterTitle: { ...theme.FONTS.h3, color: theme.COLORS.text, marginBottom: theme.SIZES.m },
-  radiusOption: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', minHeight: 48, borderBottomWidth: 1, borderBottomColor: theme.COLORS.border },
-  radiusText: { ...theme.FONTS.body1, color: theme.COLORS.text },
 });
 
 export default HomeScreen;

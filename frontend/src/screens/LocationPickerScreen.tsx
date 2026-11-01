@@ -34,6 +34,12 @@ const LocationPickerScreen = ({ navigation, route }: any) => {
   const handleConfirm = async () => {
     setIsSaving(true);
     try {
+      if (route?.params?.returnToBusiness) {
+        await preferencesService.saveBusinessRegistrationLocation(selectedCoordinate);
+        navigation.goBack();
+        return;
+      }
+
       await preferencesService.updatePreferences({
         location: {
           ...selectedCoordinate,
@@ -87,7 +93,11 @@ const LocationPickerScreen = ({ navigation, route }: any) => {
 
       <View style={styles.bottomSection}>
         {saveError ? <Text style={styles.infoText}>{saveError}</Text> : null}
-        <Text style={styles.infoText}>Haritada istediğin konuma dokunarak seçim yapabilirsin.</Text>
+        <Text style={styles.infoText}>
+          {route?.params?.returnToBusiness
+            ? 'Haritada işletmenin konumunu seç.'
+            : 'Haritada istediğin konuma dokunarak seçim yapabilirsin.'}
+        </Text>
         <TouchableOpacity style={styles.confirmBtn} onPress={handleConfirm} disabled={isSaving}>
           {isSaving ? <ActivityIndicator color={theme.COLORS.card} /> : <Text style={styles.confirmBtnText}>Bu Konumu Kullan</Text>}
         </TouchableOpacity>

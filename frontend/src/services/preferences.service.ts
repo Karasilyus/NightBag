@@ -10,6 +10,7 @@ export interface UserPreferences {
   searchRadiusKm: number;
   notificationsEnabled: boolean;
   location: SavedLocation | null;
+  favoriteCategories: string[];
 }
 
 export interface SavedBag {
@@ -22,6 +23,7 @@ export interface SavedBag {
 
 const PREFERENCES_KEY = 'userPreferences';
 const SAVED_BAGS_KEY = 'savedBags';
+const BUSINESS_LOCATION_KEY = 'businessRegistrationLocation';
 let savedBagsCache: SavedBag[] | null = null;
 let savedBagsRequest: Promise<SavedBag[]> | null = null;
 
@@ -29,6 +31,7 @@ const DEFAULT_PREFERENCES: UserPreferences = {
   searchRadiusKm: 5,
   notificationsEnabled: true,
   location: null,
+  favoriteCategories: [],
 };
 
 export const preferencesService = {
@@ -46,6 +49,9 @@ export const preferencesService = {
       ...DEFAULT_PREFERENCES,
       ...parsedPreferences,
       location: hasValidLocation ? location : null,
+      favoriteCategories: Array.isArray(parsedPreferences.favoriteCategories)
+        ? parsedPreferences.favoriteCategories.filter((category): category is string => typeof category === 'string')
+        : DEFAULT_PREFERENCES.favoriteCategories,
     };
   },
 
@@ -90,5 +96,25 @@ export const preferencesService = {
     await AsyncStorage.setItem(SAVED_BAGS_KEY, JSON.stringify(nextSavedBags));
     savedBagsCache = nextSavedBags;
     return !isSaved;
+  },
+
+  saveBusinessRegistrationLocation: async (location: Omit<SavedLocation, 'label'>): Promise<void> => {
+    await AsyncStorage.setItem(BUSINESS_LOCATION_KEY, JSON.stringify(location));
+  },
+
+  takeBusinessRegistrationLocation: async (): Promise<Omit<SavedLocation, 'label'> | null> => {
+    const storedLocation = await AsyncStorage.getItem(BUSINESS_LOCATION_KEY);
+    if (!storedLocation) return null;
+
+    await AsyncStorage.removeItem(BUSINESS_LOCATION_KEY);
+    const location = JSON.parse(storedLocation) as Partial<SavedLocation>;
+    if (!Number.isFinite(location.latitude) || !Number.isFinite(location.longitude)) {
+      throw new Error('İşletme konum bilgisi geçersiz.');
+    }
+
+    return {
+      latitude: location.latitude as number,
+      longitude: location.longitude as number,
+    };
   },
 };

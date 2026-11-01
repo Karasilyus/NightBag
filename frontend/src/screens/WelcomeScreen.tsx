@@ -1,24 +1,41 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Image, TouchableOpacity, SafeAreaView, ScrollView, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, StyleSheet, Image, TouchableOpacity, SafeAreaView, ScrollView, ActivityIndicator, Alert, Platform } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import theme from '../constants/theme';
 import { preferencesService } from '../services/preferences.service';
 import { authService } from '../services/auth.service';
 
+const showMessage = (title: string, message: string) => {
+  if (Platform.OS === 'web') {
+    window.alert(`${title}\n\n${message}`);
+  } else {
+    Alert.alert(title, message);
+  }
+};
+
 const WelcomeScreen = ({ navigation }: any) => {
   const [isLoadingLocation, setIsLoadingLocation] = useState(false);
   const [checkingSession, setCheckingSession] = useState(true);
+  const [sessionError, setSessionError] = useState('');
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const user = await authService.restoreSession();
-      if (cancelled) return;
-      if (user) {
-        navigation.replace(user.role === 'business_owner' ? 'BusinessFlow' : 'MainFlow');
-      } else {
-        setCheckingSession(false);
+      try {
+        const user = await authService.restoreSession();
+        if (cancelled) return;
+        if (user) {
+          navigation.replace(user.role === 'business_owner' ? 'BusinessFlow' : 'MainFlow');
+          return;
+        }
+      } catch (error) {
+        console.error('Oturum doğrulanamadı:', error);
+        if (!cancelled) {
+          setSessionError(error instanceof Error ? error.message : 'Oturum doğrulanamadı. Lütfen tekrar giriş yapın.');
+        }
+      } finally {
+        if (!cancelled) setCheckingSession(false);
       }
     })();
     return () => {
@@ -32,8 +49,7 @@ const WelcomeScreen = ({ navigation }: any) => {
     try {
       let { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert('Erişim Reddedildi', 'Sana yakın işletmeleri bulabilmemiz için konum iznine ihtiyacımız var.');
-        setIsLoadingLocation(false);
+        showMessage('Erişim Reddedildi', 'Sana yakın işletmeleri bulabilmemiz için konum iznine ihtiyacımız var.');
         return;
       }
 
@@ -51,12 +67,12 @@ const WelcomeScreen = ({ navigation }: any) => {
       navigation.replace('MainFlow');
     } catch (error) {
       console.error('Konum alınamadı:', error);
-      Alert.alert('Hata', 'Konum alınırken bir sorun oluştu.');
+      showMessage('Hata', 'Konum alınırken bir sorun oluştu.');
     } finally {
       setIsLoadingLocation(false);
     }
   };
-    if (checkingSession) {
+  if (checkingSession) {
     return (
       <SafeAreaView style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
         <ActivityIndicator size="large" color={theme.COLORS.primary} />
@@ -118,6 +134,7 @@ const WelcomeScreen = ({ navigation }: any) => {
 
         {/* Alt Kısım (Krem Arka Plan) */}
         <View style={styles.bottomSection}>
+          {sessionError ? <Text style={styles.sessionError}>{sessionError}</Text> : null}
           <View style={styles.locationInfoContainer}>
             <View style={styles.locationIconWrapper}>
               <Ionicons name="locate" size={20} color={theme.COLORS.primary} />
@@ -250,6 +267,12 @@ const styles = StyleSheet.create({
     ...theme.FONTS.caption,
     color: theme.COLORS.textSecondary,
     textAlign: 'center',
+  },
+  sessionError: {
+    ...theme.FONTS.body2,
+    color: theme.COLORS.error,
+    textAlign: 'center',
+    marginBottom: theme.SIZES.m,
   },
   bottomSection: {
     padding: theme.SIZES.l,

@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, Image, ActivityIndicator, Modal, Pressable } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, Image, ActivityIndicator, Modal, Pressable, Platform, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import theme from '../constants/theme';
 import { reservationService } from '../services/reservation.service';
 
 const MyOrdersScreen = () => {
+  const { width } = useWindowDimensions();
+  const isWebGrid = Platform.OS === 'web' && width >= 700;
+  const webCardWidth = width >= 1150 ? '31.5%' : '48%';
   const [activeTab, setActiveTab] = useState('Tümü');
   const [reservations, setReservations] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -65,14 +68,14 @@ const MyOrdersScreen = () => {
         ))}
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={[styles.scrollContent, isWebGrid && styles.webReservations]} showsVerticalScrollIndicator={false}>
         {isLoading ? (
           <ActivityIndicator size="large" color={theme.COLORS.primary} style={{ marginTop: 40 }} />
         ) : reservations.length > 0 ? (
           reservations.map((item) => {
             if (item.status === 'active') {
               return (
-                <View key={item.id} style={styles.activeCard}>
+                <View key={item.id} style={[styles.activeCard, isWebGrid && { width: webCardWidth }]}>
                   <View style={styles.cardHeader}>
                     <View style={styles.statusBadge}>
                       <Text style={styles.statusText}>Teslim bekliyor</Text>
@@ -109,7 +112,7 @@ const MyOrdersScreen = () => {
               );
             } else {
               return (
-                <View key={item.id} style={styles.pastCard}>
+                <View key={item.id} style={[styles.pastCard, isWebGrid && { width: webCardWidth }]}>
                   <Image source={{ uri: item.imageUrl }} style={styles.pastImage} />
                   <View style={styles.pastInfo}>
                     <View style={styles.pastRow}>
@@ -192,6 +195,7 @@ const styles = StyleSheet.create({
   tabText: { ...theme.FONTS.body2, color: theme.COLORS.textSecondary },
   activeTabText: { color: theme.COLORS.primary, fontWeight: '600' },
   scrollContent: { paddingHorizontal: theme.SIZES.l, paddingBottom: 100 },
+  webReservations: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', alignContent: 'flex-start' },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: theme.SIZES.m },
   sectionTitle: { ...theme.FONTS.h3, color: theme.COLORS.text },
   sectionCount: { ...theme.FONTS.caption, color: theme.COLORS.textSecondary },

@@ -21,6 +21,7 @@ interface WebMapCanvasProps {
   center?: MapCoordinate;
   radiusKm?: number;
   onSelectLocation?: (coordinate: MapCoordinate) => void;
+  onCenterChange?: (coordinate: MapCoordinate) => void;
   style?: ViewStyle;
 }
 
@@ -33,6 +34,8 @@ interface GoogleMap {
   setCenter(center: { lat: number; lng: number }): void;
   setZoom(zoom: number): void;
   addListener(event: 'click', callback: (event: { latLng?: { lat(): number; lng(): number } }) => void): { remove(): void };
+  addListener(event: 'idle', callback: () => void): { remove(): void };
+  getCenter(): { lat(): number; lng(): number } | undefined;
 }
 
 interface GoogleMapsApi {
@@ -101,13 +104,16 @@ const WebMapCanvas = ({
   center = MAP_CENTER,
   radiusKm = 2,
   onSelectLocation,
+  onCenterChange,
   style,
 }: WebMapCanvasProps) => {
   const mapElement = useRef<HTMLDivElement>(null);
   const mapInstance = useRef<GoogleMap | null>(null);
   const mapClickListener = useRef<{ remove(): void } | null>(null);
+  const mapIdleListener = useRef<{ remove(): void } | null>(null);
   const renderedMarkers = useRef<GoogleMapMarker[]>([]);
   const onSelectLocationRef = useRef(onSelectLocation);
+  const onCenterChangeRef = useRef(onCenterChange);
   const [mapApi, setMapApi] = useState<GoogleMapsApi | null>(null);
   const [errorMessage, setErrorMessage] = useState('');
   const apiKey = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY?.trim();
@@ -117,6 +123,10 @@ const WebMapCanvas = ({
   useEffect(() => {
     onSelectLocationRef.current = onSelectLocation;
   }, [onSelectLocation]);
+
+  useEffect(() => {
+    onCenterChangeRef.current = onCenterChange;
+  }, [onCenterChange]);
 
   useEffect(() => {
     let isMounted = true;
@@ -159,10 +169,20 @@ const WebMapCanvas = ({
         longitude: event.latLng.lng(),
       });
     });
+    mapIdleListener.current = mapInstance.current.addListener('idle', () => {
+      const currentCenter = mapInstance.current?.getCenter();
+      if (!currentCenter) return;
+      onCenterChangeRef.current?.({
+        latitude: currentCenter.lat(),
+        longitude: currentCenter.lng(),
+      });
+    });
 
     return () => {
       mapClickListener.current?.remove();
       mapClickListener.current = null;
+      mapIdleListener.current?.remove();
+      mapIdleListener.current = null;
       renderedMarkers.current.forEach((marker) => marker.setMap(null));
       renderedMarkers.current = [];
       mapInstance.current = null;
