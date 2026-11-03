@@ -20,10 +20,11 @@ import (
 )
 
 const (
-	pbkdf2Iter     = 120_000
-	minPasswordLen = 8
-	maxPasswordLen = 128
-	tokenTTL       = 30 * 24 * time.Hour
+	pbkdf2Iter          = 600_000
+	maxStoredPBKDF2Iter = 2_000_000
+	minPasswordLen      = 8
+	maxPasswordLen      = 128
+	tokenTTL            = 30 * 24 * time.Hour
 )
 
 var dummyHash, _ = hashPassword("dummy-password-for-timing")
@@ -48,29 +49,41 @@ func NewAuthService(repo domain.AuthRepository, secret string, allowUserIDHeader
 // ---------- şifre ----------
 
 func hashPassword(pw string) (string, error) {
+	return hashPasswordWithIterations(pw, pbkdf2Iter)
+}
+
+func hashPasswordWithIterations(pw string, iterations int) (string, error) {
 	salt := make([]byte, 16)
 	if _, err := rand.Read(salt); err != nil {
 		return "", err
 	}
-	key, err := pbkdf2.Key(sha256.New, pw, salt, pbkdf2Iter, 32)
+	key, err := pbkdf2.Key(sha256.New, pw, salt, iterations, 32)
 	if err != nil {
 		return "", err
 	}
-	return fmt.Sprintf("pbkdf2$%d$%s$%s", pbkdf2Iter, b64.EncodeToString(salt), b64.EncodeToString(key)), nil
+	return fmt.Sprintf("pbkdf2$%d$%s$%s", iterations, b64.EncodeToString(salt), b64.EncodeToString(key)), nil
 }
 
-func verifyPassword(pw, stored string) bool {
+func parsePasswordHash(stored string) (int, []byte, []byte, bool) {
 	parts := strings.Split(stored, "$")
 	if len(parts) != 4 || parts[0] != "pbkdf2" {
-		return false
+		return 0, nil, nil, false
 	}
 	iter, err := strconv.Atoi(parts[1])
-	if err != nil || iter < 1 {
-		return false
+	if err != nil || iter < 1 || iter > maxStoredPBKDF2Iter {
+		return 0, nil, nil, false
 	}
 	salt, err1 := b64.DecodeString(parts[2])
 	want, err2 := b64.DecodeString(parts[3])
-	if err1 != nil || err2 != nil {
+	if err1 != nil || err2 != nil || len(salt) < 16 || len(salt) > 64 || len(want) != 32 {
+		return 0, nil, nil, false
+	}
+	return iter, salt, want, true
+}
+
+func verifyPassword(pw, stored string) bool {
+	iter, salt, want, ok := parsePasswordHash(stored)
+	if !ok {
 		return false
 	}
 	got, err := pbkdf2.Key(sha256.New, pw, salt, iter, len(want))
@@ -78,6 +91,11 @@ func verifyPassword(pw, stored string) bool {
 		return false
 	}
 	return subtle.ConstantTimeCompare(got, want) == 1
+}
+
+func passwordHashNeedsRehash(stored string) bool {
+	iter, _, _, ok := parsePasswordHash(stored)
+	return !ok || iter < pbkdf2Iter
 }
 
 // ---------- imzalı token (HMAC-SHA256, harici kütüphane yok) ----------
@@ -205,6 +223,15 @@ func (s *AuthService) Login(ctx context.Context, email, password string) (*domai
 	}
 	if !verifyPassword(password, hash) {
 		return nil, domain.ErrInvalidCredentials
+	}
+	if passwordHashNeedsRehash(hash) {
+		updatedHash, err := hashPassword(password)
+		if err != nil {
+			return nil, err
+		}
+		if err := s.repo.UpdatePasswordHash(ctx, u.ID, updatedHash); err != nil {
+			return nil, err
+		}
 	}
 	return &domain.AuthResult{Token: s.issueToken(u.ID), User: *u}, nil
 }

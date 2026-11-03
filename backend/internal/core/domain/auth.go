@@ -54,4 +54,5 @@ type AuthRepository interface {
 	GetBusinessByOwner(ctx context.Context, ownerID string) (*Business, error)
 	GetAuthUser(ctx context.Context, id string) (*AuthUser, error)
 	SetPasswordIfEmpty(ctx context.Context, email, passwordHash string) error
+	UpdatePasswordHash(ctx context.Context, userID, passwordHash string) error
 }

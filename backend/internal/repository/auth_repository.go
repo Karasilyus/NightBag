@@ -23,7 +23,7 @@ func (r *BagRepository) CreateAccount(ctx context.Context, in domain.RegisterInp
 	if err != nil {
 		return nil, err
 	}
-	defer tx.Rollback(ctx) 
+	defer tx.Rollback(ctx)
 
 	var u domain.AuthUser
 	err = tx.QueryRow(ctx, `
@@ -103,6 +103,11 @@ func (r *BagRepository) SetPasswordIfEmpty(ctx context.Context, email, passwordH
 	_, err := r.pool.Exec(ctx,
 		`UPDATE users SET password_hash = $2 WHERE lower(email) = lower($1) AND password_hash IS NULL`,
 		strings.TrimSpace(email), passwordHash)
+	return err
+}
+
+func (r *BagRepository) UpdatePasswordHash(ctx context.Context, userID, passwordHash string) error {
+	_, err := r.pool.Exec(ctx, `UPDATE users SET password_hash = $2 WHERE id = $1`, userID, passwordHash)
 	return err
 }
 

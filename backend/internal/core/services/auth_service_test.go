@@ -10,6 +10,9 @@ func TestPasswordHashing(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if passwordHashNeedsRehash(h) {
+		t.Fatal("yeni parola özeti yeniden hash gerektiriyor")
+	}
 	if !verifyPassword("gizli-sifre-1", h) {
 		t.Fatal("doğru şifre reddedildi")
 	}
@@ -18,6 +21,20 @@ func TestPasswordHashing(t *testing.T) {
 	}
 	if verifyPassword("x", "bozuk-hash") {
 		t.Fatal("bozuk hash kabul edildi")
+	}
+}
+
+func TestLegacyPasswordHashNeedsRehash(t *testing.T) {
+	const legacyIterations = 120_000
+	h, err := hashPasswordWithIterations("eski-sifre", legacyIterations)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !verifyPassword("eski-sifre", h) {
+		t.Fatal("eski PBKDF2 özeti reddedildi")
+	}
+	if !passwordHashNeedsRehash(h) {
+		t.Fatal("düşük iterasyonlu özetin yenilenmesi gerekiyor")
 	}
 }
 
