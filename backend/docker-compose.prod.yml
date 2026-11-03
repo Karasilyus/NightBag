@@ -1,0 +1,93 @@
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: nightbag
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env.production}
+      POSTGRES_DB: nightbag
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nightbag -d nightbag"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  migrate:
+    image: migrate/migrate:v4.17.1
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./db/migrations/000001_init_schema.up.sql:/migrations/000001_init_schema.up.sql:ro
+      - ./db/migrations/production/000002_category.up.sql:/migrations/000002_category.up.sql:ro
+      - ./db/migrations/000003_auth.up.sql:/migrations/000003_auth.up.sql:ro
+      - ./db/migrations/000004_email_lower.up.sql:/migrations/000004_email_lower.up.sql:ro
+    command:
+      [
+        "-path=/migrations",
+        "-database=postgres://nightbag:${DB_PASSWORD}@db:5432/nightbag?sslmode=disable",
+        "up",
+      ]
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      DATABASE_URL: postgres://nightbag:${DB_PASSWORD}@db:5432/nightbag?sslmode=disable
+      PORT: "8080"
+      APP_ENV: production
+      CORS_ORIGIN: "https://${DOMAIN:?Set DOMAIN in .env.production}"
+      AUTH_SECRET: "${AUTH_SECRET:?Set AUTH_SECRET in .env.production}"
+      ALLOW_USER_ID_HEADER: "false"
+      DEMO_DATA: "false"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/healthz >/dev/null || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
+
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile.production
+      args:
+        EXPO_PUBLIC_API_URL: "https://${DOMAIN:?Set DOMAIN in .env.production}/api/v1"
+        EXPO_PUBLIC_GOOGLE_MAPS_API_KEY: ${EXPO_PUBLIC_GOOGLE_MAPS_API_KEY:-}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/ >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+      frontend:
+        condition: service_healthy
+    environment:
+      DOMAIN: "${DOMAIN:?Set DOMAIN in .env.production}"
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:

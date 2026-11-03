@@ -18,6 +18,56 @@ To stop the services, press `Ctrl+C`, then run:
 docker compose -f backend/docker-compose.yml down
 ```
 
+## Deploy to a DuckDNS server
+
+The Compose file above is for local development. For a public deployment, use
+the production stack instead. It serves the Expo web export and API on the same
+HTTPS DuckDNS hostname, keeps PostgreSQL private, and does not apply the
+development seed/test-account migrations.
+
+1. Point the DuckDNS hostname to the server's public IP. Allow inbound TCP
+   ports 80 and 443 (and UDP 443 for HTTP/3) in both the server firewall and
+   the hosting provider firewall. Do not expose PostgreSQL or port 8080.
+2. Install Docker Engine and the Docker Compose plugin using the [official
+   Docker instructions for Ubuntu](https://docs.docker.com/engine/install/ubuntu/).
+   Clone this public repository on the server:
+
+   ```sh
+   git clone https://github.com/Karasilyus/NightBag.git
+   cd NightBag/backend
+   ```
+
+3. Create a private production environment file and generate unique secrets on
+   the server:
+
+   ```sh
+   cp .env.production.example .env.production
+   openssl rand -hex 32
+   openssl rand -hex 32
+   chmod 600 .env.production
+   ```
+
+   Edit `.env.production`: set `DOMAIN` to the exact DuckDNS hostname and put
+   the two generated values into `DB_PASSWORD` and `AUTH_SECRET`. Do not reuse
+   either value or commit this file. `EXPO_PUBLIC_GOOGLE_MAPS_API_KEY` is
+   optional; without it, the web map displays a missing-key message.
+4. Start the production stack:
+
+   ```sh
+   docker compose --env-file .env.production -f docker-compose.prod.yml up -d --build
+   docker compose --env-file .env.production -f docker-compose.prod.yml ps
+   ```
+
+   Caddy obtains and renews the HTTPS certificate automatically after the
+   DuckDNS record resolves to the server and ports 80/443 are reachable.
+   Open `https://<your-duckdns-hostname>` in a browser. The mobile app must be
+   built with `EXPO_PUBLIC_API_URL=https://<your-duckdns-hostname>/api/v1`;
+   the production web image is already built with that API URL.
+
+   To update after pushing changes, run `git pull` in the repository and repeat
+   the `docker compose ... up -d --build` command. Database data is stored in
+   the `pgdata` Docker volume; back it up before replacing or removing volumes.
+
 To start the frontend and its required backend services without the database
 interface:
 
