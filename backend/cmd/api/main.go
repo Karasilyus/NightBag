@@ -122,11 +122,7 @@ func main() {
 				log.Printf("seed şifreleri: %v", err)
 			}
 		}
-		if getenv("DEMO_DATA", "false") == "true" {
-			if err := database.EnsureDemoListing(ctx, pool); err != nil {
-				log.Printf("demo ilan: %v", err)
-			}
-		}
+
 	}
 
 	mux := http.NewServeMux()
