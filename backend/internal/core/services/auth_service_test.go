@@ -1,6 +1,7 @@
 package services
 
 import (
+	"strconv"
 	"testing"
 	"time"
 )
@@ -39,19 +40,24 @@ func TestLegacyPasswordHashNeedsRehash(t *testing.T) {
 }
 
 func TestTokenRoundTrip(t *testing.T) {
-	s := NewAuthService(nil, "test-secret", false)
+	s := NewAuthService(nil, "test-secret")
 	uid := "11111111-1111-1111-1111-111111111111"
-	tok := s.issueToken(uid)
-	got, ok := s.parseToken(tok)
-	if !ok || got != uid {
+	tok := s.issueToken(uid, 2)
+	got, version, ok := s.parseToken(tok)
+	if !ok || got != uid || version != 2 {
 		t.Fatalf("token çözülemedi: %v %v", got, ok)
 	}
-	if _, ok := s.parseToken(tok + "x"); ok {
+	if _, _, ok := s.parseToken(tok + "x"); ok {
 		t.Fatal("bozulmuş token kabul edildi")
 	}
-	other := NewAuthService(nil, "baska-secret", false)
-	if _, ok := other.parseToken(tok); ok {
+	other := NewAuthService(nil, "baska-secret")
+	if _, _, ok := other.parseToken(tok); ok {
 		t.Fatal("farklı anahtarla imzalı token kabul edildi")
 	}
-	_ = time.Now
+
+	legacyPayload := uid + "|" + strconv.FormatInt(time.Now().Add(tokenTTL).Unix(), 10)
+	legacyToken := b64.EncodeToString([]byte(legacyPayload)) + "." + s.sign(legacyPayload)
+	if got, version, ok := s.parseToken(legacyToken); !ok || got != uid || version != 0 {
+		t.Fatal("önceki sürüm token'ı desteklenmedi")
+	}
 }

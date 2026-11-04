@@ -58,7 +58,7 @@ func scanListing(row rowScanner) (domain.Listing, error) {
 		&l.OriginalValue, &l.Price, &l.QuantityTotal, &l.QuantityRemaining,
 		&l.PickupDate, &l.PickupStart, &l.PickupEnd,
 		&l.PhotoURL, &l.Status, &l.Lon, &l.Lat, &l.DistanceM,
-		&l.Rating, &l.ReviewCount, // YENİ EKLENENLER
+		&l.Rating, &l.ReviewCount,
 	)
 	l.Category = domain.BagCategory(category)
 	if l.ContentTags == nil {
@@ -124,9 +124,7 @@ func (r *BagRepository) CreateListing(ctx context.Context, in domain.CreateListi
 		$8::numeric, $9::numeric, $10::int, $10::int,
 		$11::date, $12::time, $13::time, $14::text, 'published'::listing_status, now()
 	FROM businesses b
-	WHERE b.owner_id = $2 AND b.is_active
-	ORDER BY (b.id = $1::uuid) DESC, b.created_at
-	LIMIT 1
+	WHERE b.owner_id = $2 AND b.id = $1::uuid AND b.is_active
 	RETURNING id::text`
 
 	var id string
@@ -136,7 +134,7 @@ func (r *BagRepository) CreateListing(ctx context.Context, in domain.CreateListi
 		in.PickupDate, in.PickupStart, in.PickupEnd, in.PhotoURL,
 	).Scan(&id)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, domain.ErrForbidden 
+		return nil, domain.ErrForbidden
 	}
 	if err != nil {
 		return nil, err
@@ -181,12 +179,32 @@ func isForeignKeyViolation(err error) bool {
 	return errors.As(err, &pgErr) && pgErr.Code == "23503"
 }
 
-func (r *BagRepository) Reserve(ctx context.Context, userID, listingID string, qty int) (*domain.Reservation, error) {
+func (r *BagRepository) Reserve(ctx context.Context, userID, listingID string, input domain.ReservationInput) (*domain.Reservation, error) {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
 		return nil, err
 	}
 	defer tx.Rollback(ctx) //nolint:errcheck
+
+	var lockedUserID string
+	if err := tx.QueryRow(ctx, `SELECT id::text FROM users WHERE id = $1 FOR UPDATE`, userID).Scan(&lockedUserID); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, domain.ErrUserNotFound
+		}
+		return nil, err
+	}
+
+	var activeBags int
+	if err := tx.QueryRow(ctx, `
+		SELECT COALESCE(SUM(quantity), 0)::int
+		FROM reservations
+		WHERE user_id = $1 AND status = 'pending_pickup'`, userID,
+	).Scan(&activeBags); err != nil {
+		return nil, err
+	}
+	if activeBags+input.Quantity > domain.MaxActiveReservationBags {
+		return nil, domain.ErrReservationLimit
+	}
 
 	var (
 		price, original float64
@@ -218,7 +236,7 @@ func (r *BagRepository) Reserve(ctx context.Context, userID, listingID string, q
 		return nil, domain.ErrListingNotAvailable
 	case windowPassed:
 		return nil, domain.ErrPickupWindowPassed
-	case remaining < qty:
+	case remaining < input.Quantity:
 		return nil, domain.ErrInsufficientStock
 	}
 
@@ -230,10 +248,10 @@ func (r *BagRepository) Reserve(ctx context.Context, userID, listingID string, q
 		}
 		err = tx.QueryRow(ctx, `
 			INSERT INTO reservations (user_id, listing_id, quantity, unit_price, unit_original_value, pickup_code, terms_accepted)
-			VALUES ($1, $2, $3, $4, $5, $6, TRUE)
+			VALUES ($1, $2, $3, $4, $5, $6, $7)
 			ON CONFLICT (pickup_code) WHERE status = 'pending_pickup' DO NOTHING
 			RETURNING id::text`,
-			userID, listingID, qty, price, original, code,
+			userID, listingID, input.Quantity, price, original, code, input.AcceptedTerms,
 		).Scan(&resID)
 		if err == nil {
 			break
@@ -255,7 +273,7 @@ func (r *BagRepository) Reserve(ctx context.Context, userID, listingID string, q
 		   SET quantity_remaining = quantity_remaining - $2::int,
 		       status = CASE WHEN quantity_remaining - $2::int = 0
 		                     THEN 'sold_out'::listing_status ELSE status END
-		 WHERE id = $1`, listingID, qty)
+		 WHERE id = $1`, listingID, input.Quantity)
 	if err != nil {
 		return nil, err
 	}
@@ -298,7 +316,7 @@ func (r *BagRepository) CancelReservation(ctx context.Context, userID, reservati
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback(ctx) 
+	defer tx.Rollback(ctx)
 
 	var (
 		listingID, status string
@@ -425,9 +443,9 @@ func (r *BagRepository) AddFavorite(ctx context.Context, userID, businessID stri
 	_, err := r.pool.Exec(ctx, `
         INSERT INTO favorite_businesses (user_id, business_id) 
         VALUES ($1, $2) ON CONFLICT DO NOTHING`, userID, businessID)
-	var pgErr *pgconn.PgError
-	if errors.As(err, &pgErr) && pgErr.Code == "23503" {
-		if strings.Contains(pgErr.ConstraintName, "business") {
+	if isForeignKeyViolation(err) {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && strings.HasSuffix(pgErr.ConstraintName, "_business_id_fkey") {
 			return domain.ErrBusinessNotFound
 		}
 		return domain.ErrUserNotFound
@@ -441,19 +459,6 @@ func (r *BagRepository) RemoveFavorite(ctx context.Context, userID, businessID s
         WHERE user_id = $1 AND business_id = $2`, userID, businessID)
 	return err
 }
-func (r *BagRepository) GetUser(ctx context.Context, id string) (*domain.User, error) {
-	var u domain.User
-	err := r.pool.QueryRow(ctx, `
-        SELECT id::text, full_name, email, role::text 
-        FROM users WHERE id = $1`, id,
-	).Scan(&u.ID, &u.FullName, &u.Email, &u.Role)
-
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, domain.ErrUserNotFound
-	}
-	return &u, err
-}
-
 func (r *BagRepository) ListFavoriteListings(ctx context.Context, userID string) ([]domain.Listing, error) {
 	// Favoriye alınan işletmelerin sadece 'published' olan (aktif) ilanlarını getirir
 	q := listingSelect("NULL::float8") + `

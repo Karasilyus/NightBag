@@ -65,12 +65,12 @@ func (r *BagRepository) GetCredentials(ctx context.Context, email string) (*doma
 	var u domain.AuthUser
 	var hash string
 	err := r.pool.QueryRow(ctx, `
-		SELECT u.id::text, u.full_name, u.email, u.role::text, COALESCE(u.password_hash, ''),
+		SELECT u.id::text, u.full_name, u.email, u.role::text, COALESCE(u.password_hash, ''), u.token_version,
 		       (SELECT b.id::text FROM businesses b
 		         WHERE b.owner_id = u.id AND b.is_active
 		         ORDER BY b.created_at LIMIT 1)
 		FROM users u WHERE lower(u.email) = lower($1)`, email,
-	).Scan(&u.ID, &u.FullName, &u.Email, &u.Role, &hash, &u.BusinessID)
+	).Scan(&u.ID, &u.FullName, &u.Email, &u.Role, &hash, &u.TokenVersion, &u.BusinessID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, "", domain.ErrUserNotFound
 	}
@@ -111,15 +111,20 @@ func (r *BagRepository) UpdatePasswordHash(ctx context.Context, userID, password
 	return err
 }
 
+func (r *BagRepository) RevokeTokens(ctx context.Context, userID string) error {
+	_, err := r.pool.Exec(ctx, `UPDATE users SET token_version = token_version + 1 WHERE id = $1`, userID)
+	return err
+}
+
 func (r *BagRepository) GetAuthUser(ctx context.Context, id string) (*domain.AuthUser, error) {
 	var u domain.AuthUser
 	err := r.pool.QueryRow(ctx, `
-		SELECT u.id::text, u.full_name, u.email, u.role::text,
+		SELECT u.id::text, u.full_name, u.email, u.role::text, u.token_version,
 		       (SELECT b.id::text FROM businesses b
 		         WHERE b.owner_id = u.id AND b.is_active
 		         ORDER BY b.created_at LIMIT 1)
 		FROM users u WHERE u.id = $1`, id,
-	).Scan(&u.ID, &u.FullName, &u.Email, &u.Role, &u.BusinessID)
+	).Scan(&u.ID, &u.FullName, &u.Email, &u.Role, &u.TokenVersion, &u.BusinessID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, domain.ErrUserNotFound
 	}

@@ -20,10 +20,7 @@ services:
       db:
         condition: service_healthy
     volumes:
-      - ./db/migrations/000001_init_schema.up.sql:/migrations/000001_init_schema.up.sql:ro
-      - ./db/migrations/production/000002_category.up.sql:/migrations/000002_category.up.sql:ro
-      - ./db/migrations/000003_auth.up.sql:/migrations/000003_auth.up.sql:ro
-      - ./db/migrations/000004_email_lower.up.sql:/migrations/000004_email_lower.up.sql:ro
+      - ./db/migrations:/migrations:ro
     command:
       [
         "-path=/migrations",
@@ -45,8 +42,6 @@ services:
       APP_ENV: production
       CORS_ORIGIN: "https://${DOMAIN:?Set DOMAIN in .env.production}"
       AUTH_SECRET: "${AUTH_SECRET:?Set AUTH_SECRET in .env.production}"
-      ALLOW_USER_ID_HEADER: "false"
-      DEMO_DATA: "false"
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/healthz >/dev/null || exit 1"]
       interval: 5s
@@ -55,6 +50,7 @@ services:
       start_period: 5s
 
   frontend:
+    image: nightbag-frontend-production
     build:
       context: ../frontend
       dockerfile: Dockerfile.production

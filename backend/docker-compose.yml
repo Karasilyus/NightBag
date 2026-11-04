@@ -6,7 +6,7 @@ services:
       POSTGRES_PASSWORD: nightbag
       POSTGRES_DB: nightbag
     ports:
-      - "5433:5432"
+      - "127.0.0.1:5433:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -32,18 +32,17 @@ services:
   api:
     build: .
     depends_on:
-      migrate:
+      seed:
         condition: service_completed_successfully
     environment:
       DATABASE_URL: postgres://nightbag:nightbag@db:5432/nightbag?sslmode=disable
       PORT: "8080"
       CORS_ORIGIN: "${CORS_ORIGIN:-http://localhost:8081}"
       AUTH_SECRET: "${AUTH_SECRET:-dev-secret-degistir}"
-      ALLOW_USER_ID_HEADER: "false"
       SEED_PASSWORD: "${SEED_PASSWORD:-nightbag123}"
       DEMO_DATA: "true"
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/healthz >/dev/null || exit 1"]
       interval: 5s
@@ -51,7 +50,28 @@ services:
       retries: 12
       start_period: 5s
 
+  seed:
+    image: postgres:16-alpine
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      PGPASSWORD: nightbag
+    volumes:
+      - ./db/seed:/seed:ro
+    command:
+      [
+        "psql",
+        "-h", "db",
+        "-U", "nightbag",
+        "-d", "nightbag",
+        "-v", "ON_ERROR_STOP=1",
+        "-f", "/seed/dev_seed.sql",
+        "-f", "/seed/dev_test_data.sql"
+      ]
+
   frontend:
+    image: nightbag-frontend-dev
     build:
       context: ../frontend
       dockerfile: Dockerfile

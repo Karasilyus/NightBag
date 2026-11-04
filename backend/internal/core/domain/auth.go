@@ -26,7 +26,8 @@ type RegisterInput struct {
 
 type AuthUser struct {
 	User
-	BusinessID *string `json:"business_id,omitempty"`
+	BusinessID   *string `json:"business_id,omitempty"`
+	TokenVersion int     `json:"-"`
 }
 
 type AuthResult struct {
@@ -55,4 +56,5 @@ type AuthRepository interface {
 	GetAuthUser(ctx context.Context, id string) (*AuthUser, error)
 	SetPasswordIfEmpty(ctx context.Context, email, passwordHash string) error
 	UpdatePasswordHash(ctx context.Context, userID, passwordHash string) error
+	RevokeTokens(ctx context.Context, userID string) error
 }

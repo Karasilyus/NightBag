@@ -16,4 +16,5 @@ var (
 	ErrInvalidCredentials  = errors.New("e-posta veya şifre hatalı")
 	ErrBusinessNotFound    = errors.New("işletme bulunamadı")
 	ErrOwnListing          = errors.New("kendi işletmenizin çantasını rezerve edemezsiniz")
+	ErrReservationLimit    = errors.New("aktif rezervasyon çanta sınırına ulaştınız")
 )

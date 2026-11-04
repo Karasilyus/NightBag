@@ -5,23 +5,29 @@ import (
 	"errors"
 	"log"
 	"net/http"
-	"regexp"
 	"strconv"
+	"time"
 
 	"nightbag/internal/core/domain"
 	"nightbag/internal/core/services"
 )
 
-var uuidRe = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
-
 type BagHandler struct {
-	svc      *services.BagService
-	authSvc  *services.AuthService
-	loginLim *loginLimiter
+	svc           *services.BagService
+	authSvc       *services.AuthService
+	loginLim      *loginLimiter
+	authIPLim     *loginLimiter
+	registerIPLim *loginLimiter
 }
 
 func NewBagHandler(svc *services.BagService, authSvc *services.AuthService) *BagHandler {
-	return &BagHandler{svc: svc, authSvc: authSvc, loginLim: newDefaultLoginLimiter()}
+	return &BagHandler{
+		svc:           svc,
+		authSvc:       authSvc,
+		loginLim:      newDefaultLoginLimiter(),
+		authIPLim:     newLoginLimiter(60, 15*time.Minute),
+		registerIPLim: newLoginLimiter(5, time.Hour),
+	}
 }
 
 func (h *BagHandler) Register(mux *http.ServeMux) {
@@ -32,6 +38,7 @@ func (h *BagHandler) Register(mux *http.ServeMux) {
 	// Kimlik doğrulama
 	mux.HandleFunc("POST /api/v1/auth/register", h.register)
 	mux.HandleFunc("POST /api/v1/auth/login", h.login)
+	mux.HandleFunc("POST /api/v1/auth/logout", h.auth(h.logout))
 
 	// Müşteri
 	mux.HandleFunc("GET /api/v1/users/me/stats", h.auth(h.getUserStats))
@@ -52,10 +59,13 @@ func (h *BagHandler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v1/business/pickups", h.auth(h.completePickup))
 }
 
-
 func (h *BagHandler) auth(next func(http.ResponseWriter, *http.Request, string)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		uid, ok := h.authSvc.UserID(r)
+		uid, ok, err := h.authSvc.UserID(r.Context(), r)
+		if err != nil {
+			writeError(w, err)
+			return
+		}
 		if !ok {
 			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "giriş yapmanız gerekiyor"})
 			return
@@ -63,15 +73,6 @@ func (h *BagHandler) auth(next func(http.ResponseWriter, *http.Request, string))
 		next(w, r, uid)
 	}
 }
-func (h *BagHandler) businessReservations(w http.ResponseWriter, r *http.Request, ownerID string) {
-	items, err := h.svc.BusinessReservations(r.Context(), ownerID)
-	if err != nil {
-		writeError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, items)
-}
-
 func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(status)
@@ -97,7 +98,8 @@ func writeError(w http.ResponseWriter, err error) {
 		status, msg = http.StatusConflict, err.Error()
 	case errors.Is(err, domain.ErrForbidden), errors.Is(err, domain.ErrOwnListing):
 		status, msg = http.StatusForbidden, err.Error()
-	case errors.Is(err, domain.ErrListingNotAvailable),
+	case errors.Is(err, domain.ErrReservationLimit),
+		errors.Is(err, domain.ErrListingNotAvailable),
 		errors.Is(err, domain.ErrInsufficientStock),
 		errors.Is(err, domain.ErrPickupWindowPassed),
 		errors.Is(err, domain.ErrNotCancellable):
@@ -121,7 +123,7 @@ func decode(w http.ResponseWriter, r *http.Request, dst any) bool {
 
 func pathUUID(w http.ResponseWriter, r *http.Request, name string) (string, bool) {
 	v := r.PathValue(name)
-	if !uuidRe.MatchString(v) {
+	if !domain.IsUUID(v) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": name + " geçerli bir UUID olmalı"})
 		return "", false
 	}
@@ -139,7 +141,15 @@ func (h *BagHandler) nearby(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "lat ve lon zorunlu"})
 		return
 	}
-	radius, _ := strconv.ParseFloat(q.Get("radius"), 64) // metre, boşsa 5000
+	var radius float64
+	if rawRadius := q.Get("radius"); rawRadius != "" {
+		parsedRadius, parseErr := strconv.ParseFloat(rawRadius, 64)
+		if parseErr != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "radius geçerli bir sayı olmalı"})
+			return
+		}
+		radius = parsedRadius
+	}
 	limit, _ := strconv.Atoi(q.Get("limit"))
 
 	items, err := h.svc.NearbyListings(r.Context(), domain.NearbyFilter{
@@ -176,7 +186,8 @@ func (h *BagHandler) reserve(w http.ResponseWriter, r *http.Request, userID stri
 		return
 	}
 	var req struct {
-		Quantity int `json:"quantity"`
+		Quantity      int  `json:"quantity"`
+		AcceptedTerms bool `json:"accepted_terms"`
 	}
 	if r.ContentLength != 0 && !decode(w, r, &req) {
 		return
@@ -185,7 +196,9 @@ func (h *BagHandler) reserve(w http.ResponseWriter, r *http.Request, userID stri
 		req.Quantity = 1
 	}
 
-	res, err := h.svc.Reserve(r.Context(), userID, listingID, req.Quantity)
+	res, err := h.svc.Reserve(r.Context(), userID, listingID, domain.ReservationInput{
+		Quantity: req.Quantity, AcceptedTerms: req.AcceptedTerms,
+	})
 	if err != nil {
 		writeError(w, err)
 		return
@@ -328,6 +341,23 @@ func (h *BagHandler) getMe(w http.ResponseWriter, r *http.Request, userID string
 		return
 	}
 	writeJSON(w, http.StatusOK, u)
+}
+
+func (h *BagHandler) businessReservations(w http.ResponseWriter, r *http.Request, ownerID string) {
+	items, err := h.svc.BusinessReservations(r.Context(), ownerID)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, items)
+}
+
+func (h *BagHandler) logout(w http.ResponseWriter, r *http.Request, userID string) {
+	if err := h.authSvc.RevokeTokens(r.Context(), userID); err != nil {
+		writeError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (h *BagHandler) listFavorites(w http.ResponseWriter, r *http.Request, userID string) {

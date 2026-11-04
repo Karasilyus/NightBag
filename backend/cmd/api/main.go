@@ -32,6 +32,18 @@ func withLogging(next http.Handler) http.Handler {
 	})
 }
 
+func withRecovery(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer func() {
+			if recovered := recover(); recovered != nil {
+				log.Printf("panic recovered: %v", recovered)
+				http.Error(w, "sunucu hatası", http.StatusInternalServerError)
+			}
+		}()
+		next.ServeHTTP(w, r)
+	})
+}
+
 func withCORS(origins string, next http.Handler) http.Handler {
 	allowed := map[string]bool{}
 	for _, o := range strings.Split(origins, ",") {
@@ -46,7 +58,7 @@ func withCORS(origins string, next http.Handler) http.Handler {
 		} else if reqOrigin := r.Header.Get("Origin"); allowed[reqOrigin] {
 			w.Header().Set("Access-Control-Allow-Origin", reqOrigin)
 		}
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-User-ID")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
 		w.Header().Set("Access-Control-Max-Age", "600")
 		if r.Method == http.MethodOptions {
@@ -66,7 +78,6 @@ func main() {
 	corsOrigin := getenv("CORS_ORIGIN", "*")
 	isProd := getenv("APP_ENV", "dev") == "production"
 	authSecret := getenv("AUTH_SECRET", "")
-	allowHeader := getenv("ALLOW_USER_ID_HEADER", "false") == "true"
 
 	if authSecret == "" {
 		if isProd {
@@ -75,13 +86,6 @@ func main() {
 		authSecret = "dev-secret-degistir"
 		log.Println("UYARI: AUTH_SECRET tanımlı değil, geliştirme anahtarı kullanılıyor")
 	}
-	if allowHeader {
-		if isProd {
-			log.Fatal("ALLOW_USER_ID_HEADER production'da açık olamaz")
-		}
-		log.Println("UYARI: ALLOW_USER_ID_HEADER=true (güvensiz, sadece geliştirme için)")
-	}
-
 	pool, err := database.NewPool(ctx, dbURL)
 	if err != nil {
 		log.Fatalf("veritabanı: %v", err)
@@ -109,17 +113,19 @@ func main() {
 
 	repo := repository.NewBagRepository(pool)
 	svc := services.NewBagService(repo)
-	authSvc := services.NewAuthService(repo, authSecret, allowHeader)
+	authSvc := services.NewAuthService(repo, authSecret)
 	bagHandler := handlers.NewBagHandler(svc, authSvc)
 
-	if pw := getenv("SEED_PASSWORD", ""); pw != "" {
-		if err := authSvc.EnsureSeedPasswords(ctx, pw); err != nil {
-			log.Printf("seed şifreleri: %v", err)
+	if !isProd {
+		if pw := getenv("SEED_PASSWORD", ""); pw != "" {
+			if err := authSvc.EnsureSeedPasswords(ctx, pw); err != nil {
+				log.Printf("seed şifreleri: %v", err)
+			}
 		}
-	}
-	if getenv("DEMO_DATA", "false") == "true" {
-		if err := database.EnsureDemoListing(ctx, pool); err != nil {
-			log.Printf("demo ilan: %v", err)
+		if getenv("DEMO_DATA", "false") == "true" {
+			if err := database.EnsureDemoListing(ctx, pool); err != nil {
+				log.Printf("demo ilan: %v", err)
+			}
 		}
 	}
 
@@ -135,10 +141,11 @@ func main() {
 
 	srv := &http.Server{
 		Addr:              ":" + port,
-		Handler:           withCORS(corsOrigin, withLogging(mux)),
+		Handler:           withCORS(corsOrigin, withLogging(withRecovery(mux))),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       60 * time.Second,
 	}
 
 	errCh := make(chan error, 1)
