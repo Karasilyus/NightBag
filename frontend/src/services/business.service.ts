@@ -37,6 +37,14 @@ const mapBusinessOrder = (reservation: BusinessReservation) => ({
 });
 
 export const businessService = {
+  getMyBusiness: async (): Promise<BusinessResponse> => {
+    const response = await apiClient.get<BusinessResponse>('/business/me');
+    if (!response.data?.id || !response.data.name) {
+      throw new Error('İşletme bilgisi yanıtı geçersiz.');
+    }
+    return response.data;
+  },
+
   /**
    * İşletme genel bakış istatistiklerini getirir.
    * BusinessDashboardScreen'de kullanılır.
@@ -44,7 +52,7 @@ export const businessService = {
   getDashboardData: async (): Promise<{ data: any }> => {
     const [overviewResponse, businessResponse, ordersResponse] = await Promise.all([
       apiClient.get<BusinessOverviewResponse>('/business/overview'),
-      apiClient.get<BusinessResponse>('/business/me'),
+      businessService.getMyBusiness(),
       apiClient.get<BusinessReservation[]>('/business/reservations'),
     ]);
     const overview = overviewResponse.data;
@@ -56,9 +64,6 @@ export const businessService = {
     ) {
       throw new Error('İşletme özeti yanıtı geçersiz.');
     }
-    if (!businessResponse.data?.id || !businessResponse.data.name) {
-      throw new Error('İşletme bilgisi yanıtı geçersiz.');
-    }
     if (!Array.isArray(ordersResponse.data)) {
       throw new Error('İşletme rezervasyonları yanıtı geçersiz.');
     }
@@ -68,8 +73,8 @@ export const businessService = {
 
     return {
       data: {
-        businessName: businessResponse.data.name,
-        businessId: businessResponse.data?.id,
+        businessName: businessResponse.name,
+        businessId: businessResponse.id,
         dateString: new Date().toLocaleDateString('tr-TR', {
           weekday: 'long',
           day: 'numeric',

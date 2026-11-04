@@ -19,13 +19,14 @@ const CheckoutScreen = ({ route, navigation }: any) => {
 
   const [quantity, setQuantity] = useState(1);
   const [isReserving, setIsReserving] = useState(false);
+  const [termsAccepted, setTermsAccepted] = useState(false);
   const pricePerBag = currentBag.price;
 
   const handleConfirmReservation = async () => {
     setIsReserving(true);
     try {
       if (currentBag.id) {
-        const res = await reservationService.reserve(currentBag.id, quantity);
+        const res = await reservationService.reserve(currentBag.id, quantity, termsAccepted);
         navigation.navigate('ReservationConfirmed', { reservation: res });
       } else {
         // ID olmadan doğrudan geçiş yapıldıysa statik veriyle yönlendir
@@ -125,12 +126,22 @@ const CheckoutScreen = ({ route, navigation }: any) => {
             <Text style={styles.totalSummaryValue}>{quantity * pricePerBag} ₺</Text>
           </View>
           
-          <View style={styles.agreementBox}>
-            <Ionicons name="checkmark-circle" size={20} color={theme.COLORS.primary} />
+          <TouchableOpacity
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: termsAccepted }}
+            style={styles.agreementBox}
+            onPress={() => setTermsAccepted((accepted) => !accepted)}
+            disabled={isReserving}
+          >
+            <Ionicons
+              name={termsAccepted ? 'checkmark-circle' : 'ellipse-outline'}
+              size={22}
+              color={termsAccepted ? theme.COLORS.primary : theme.COLORS.textSecondary}
+            />
             <Text style={styles.agreementText}>
-              Teslim saatinde işletmede olacağımı ve çanta içeriğini kabul ettiğimi onaylıyorum.
+              Teslim saatinde işletmede olacağımı ve çanta içeriğinin sürpriz olabileceğini kabul ediyorum.
             </Text>
-          </View>
+          </TouchableOpacity>
         </View>
 
       </ScrollView>
@@ -140,7 +151,7 @@ const CheckoutScreen = ({ route, navigation }: any) => {
         <TouchableOpacity 
           style={[styles.confirmBtn, isReserving && { opacity: 0.7 }]} 
           onPress={handleConfirmReservation}
-          disabled={isReserving}
+          disabled={isReserving || !termsAccepted}
         >
           {isReserving ? (
             <ActivityIndicator color={theme.COLORS.card} />

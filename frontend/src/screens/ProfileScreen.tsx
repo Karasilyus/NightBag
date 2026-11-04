@@ -74,8 +74,13 @@ const ProfileScreen = ({ navigation }: any) => {
   }, [navigation]);
 
   const handleLogout = async () => {
-    await authService.logout();
-    navigation.replace('Welcome');
+    try {
+      await authService.logout();
+    } catch (error) {
+      console.error('Sunucu oturumu kapatılamadı:', error);
+    } finally {
+      navigation.replace('Welcome');
+    }
   };
 
   const getInitials = (name: string) => {

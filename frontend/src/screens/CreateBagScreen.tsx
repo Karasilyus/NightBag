@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, TextInput, ActivityIndicator, Alert, KeyboardAvoidingView, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import theme from '../constants/theme';
@@ -13,7 +13,7 @@ const CATEGORY_ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
 };
 const QUANTITY_PRESETS = [1, 5, 10, 20];
 
-const CreateBagScreen = ({ route, navigation }: any) => {
+const CreateBagScreen = ({ navigation }: any) => {
   const [activeCategory, setActiveCategory] = useState('Fırın');
   const [originalPrice, setOriginalPrice] = useState('350');
   const [price, setPrice] = useState('125');
@@ -23,6 +23,8 @@ const CreateBagScreen = ({ route, navigation }: any) => {
   const [pickupDayOffset, setPickupDayOffset] = useState(0);
   const [description, setDescription] = useState('Günün taze lezzetlerinden oluşan sürpriz seçki.');
   const [isPublishing, setIsPublishing] = useState(false);
+  const [businessId, setBusinessId] = useState('');
+  const [businessLoadError, setBusinessLoadError] = useState('');
   const parsedOriginalPrice = parseFloat(originalPrice.replace(',', '.')) || 0;
   const parsedPrice = parseFloat(price.replace(',', '.')) || 0;
   const discountPercent = parsedOriginalPrice > 0 && parsedPrice > 0
@@ -38,8 +40,20 @@ const CreateBagScreen = ({ route, navigation }: any) => {
     return `${year}-${month}-${day}`;
   };
 
-  // Furkan'ın 000002_seed.up.sql dosyasındaki Moda Fırını ID'si varsayılan olarak tanımlandı
-  const businessId = route?.params?.businessId || '33333333-3333-3333-3333-333333333333';
+  useEffect(() => {
+    let active = true;
+    businessService.getMyBusiness()
+      .then((business) => {
+        if (active) setBusinessId(business.id);
+      })
+      .catch((error) => {
+        console.error('İşletme bilgisi yüklenemedi:', error);
+        if (active) setBusinessLoadError('İşletme bilgisi yüklenemedi. Bağlantınızı kontrol edip tekrar deneyin.');
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const categoryToApi = (cat: string): string => {
     const map: Record<string, string> = {
@@ -52,6 +66,11 @@ const CreateBagScreen = ({ route, navigation }: any) => {
   };
 
   const handlePublish = async () => {
+    if (!businessId) {
+      Alert.alert('İşletme bulunamadı', businessLoadError || 'İlan yayımlamak için işletme bilgisi gerekli.');
+      return;
+    }
+
     const origVal = parseFloat(originalPrice.replace(',', '.'));
     const prVal = parseFloat(price.replace(',', '.'));
 
@@ -140,6 +159,9 @@ const CreateBagScreen = ({ route, navigation }: any) => {
               <Ionicons name="leaf" size={34} color="#A8C9AF" />
             </View>
           </View>
+          {businessLoadError ? (
+            <Text accessibilityRole="alert" style={styles.businessError}>{businessLoadError}</Text>
+          ) : null}
 
           <View style={styles.sectionHeading}>
             <View style={styles.stepBadge}><Text style={styles.stepNumber}>01</Text></View>
@@ -387,9 +409,9 @@ const CreateBagScreen = ({ route, navigation }: any) => {
             <Text style={styles.bottomSummaryValue}>{bagCount} çanta <Text style={styles.bottomSummaryPrice}>· {parsedPrice > 0 ? `${parsedPrice} ₺ / adet` : 'fiyat girin'}</Text></Text>
           </View>
           <TouchableOpacity
-            style={[styles.publishBtn, isPublishing && styles.publishBtnDisabled]}
+            style={[styles.publishBtn, (isPublishing || !businessId) && styles.publishBtnDisabled]}
             onPress={handlePublish}
-            disabled={isPublishing}
+            disabled={isPublishing || !businessId}
             accessibilityRole="button"
           >
             {isPublishing ? (
@@ -424,6 +446,7 @@ const styles = StyleSheet.create({
   heroTitle: { ...theme.FONTS.body2, fontWeight: '700', lineHeight: 20, color: theme.COLORS.text, marginBottom: 3 },
   heroDescription: { ...theme.FONTS.caption, lineHeight: 17, color: theme.COLORS.textSecondary },
   heroDecoration: { opacity: 0.8 },
+  businessError: { ...theme.FONTS.body2, color: theme.COLORS.error, marginBottom: theme.SIZES.m },
   sectionHeading: { flexDirection: 'row', alignItems: 'center', marginBottom: theme.SIZES.m },
   stepBadge: { width: 34, height: 34, alignItems: 'center', justifyContent: 'center', borderRadius: 12, backgroundColor: theme.COLORS.tagBackground, marginRight: theme.SIZES.s },
   stepNumber: { fontSize: 11, fontWeight: '800', color: theme.COLORS.primary },

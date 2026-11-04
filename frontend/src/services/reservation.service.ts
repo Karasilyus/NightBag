@@ -53,9 +53,10 @@ export const reservationService = {
    * Yeni rezervasyon oluşturur.
    * CheckoutScreen → onay butonunda kullanılır.
    */
-  reserve: async (listingId: string, quantity: number = 1): Promise<any> => {
+  reserve: async (listingId: string, quantity: number = 1, acceptedTerms = false): Promise<any> => {
     const response = await apiClient.post(`/listings/${listingId}/reserve`, {
       quantity,
+      accepted_terms: acceptedTerms,
     });
     return mapReservation(response.data);
   },

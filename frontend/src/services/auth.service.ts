@@ -108,7 +108,11 @@ export const authService = {
 
   logout: async () => {
     favoritesService.clearCache();
-    await AsyncStorage.multiRemove(['currentUser', 'authToken']);
+    try {
+      await apiClient.post('/auth/logout');
+    } finally {
+      await AsyncStorage.multiRemove(['currentUser', 'authToken']);
+    }
   },
 
   restoreSession: async () => {

@@ -8,7 +8,7 @@ Install Docker Desktop, then run this command from the repository root:
 docker compose -f backend/docker-compose.yml up --build
 ```
 
-This starts the database, backend API, and Expo web frontend. The backend is
+This starts the database, development-only seed fixtures, backend API, and Expo web frontend. The backend is
 available at [http://localhost:8080](http://localhost:8080); the frontend opens
 at [http://localhost:8081](http://localhost:8081) after the API is healthy.
 
@@ -23,7 +23,7 @@ docker compose -f backend/docker-compose.yml down
 The Compose file above is for local development. For a public deployment, use
 the production stack instead. It serves the Expo web export and API on the same
 HTTPS DuckDNS hostname, keeps PostgreSQL private, and does not apply the
-development seed/test-account migrations.
+development seed fixtures or test accounts.
 
 1. Point the DuckDNS hostname to the server's public IP. Allow inbound TCP
    ports 80 and 443 (and UDP 443 for HTTP/3) in both the server firewall and
