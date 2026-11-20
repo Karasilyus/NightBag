@@ -52,6 +52,14 @@ const BusinessDashboardScreen = ({ navigation }: any) => {
     }
   };
 
+  const openPublishBag = () => {
+    if (!data?.businessId) {
+      Alert.alert('İşletme bilgisi bulunamadı', 'Çanta yayınlamak için işletme bilgisi yeniden yüklenmeli.');
+      return;
+    }
+    navigation.navigate('PublishBag', { businessId: data.businessId });
+  };
+
   if (isLoading || !data) {
     return (
       <SafeAreaView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
@@ -90,6 +98,22 @@ const BusinessDashboardScreen = ({ navigation }: any) => {
         <Text style={styles.welcomeText}>{data.businessName}</Text>
         <Text style={styles.dateText}>{data.dateString}</Text>
 
+        <TouchableOpacity
+          style={styles.profileLink}
+          onPress={() => navigation.navigate('BusinessProfile', {
+            businessId: data.businessId,
+            businessName: data.businessName,
+          })}
+          accessibilityRole="button"
+        >
+          <Ionicons name="storefront-outline" size={20} color={theme.COLORS.primary} />
+          <View style={styles.profileLinkInfo}>
+            <Text style={styles.profileLinkTitle}>İşletme profili</Text>
+            <Text style={styles.profileLinkDescription}>Bilgilerini ve fotoğrafını düzenle</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={theme.COLORS.textSecondary} />
+        </TouchableOpacity>
+
         <View style={styles.statsRow}>
           <View style={styles.statBox}>
             <Text style={styles.statNumber}>{data.stats.published}</Text>
@@ -107,7 +131,7 @@ const BusinessDashboardScreen = ({ navigation }: any) => {
 
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Bugünün çantası</Text>
-          <TouchableOpacity style={styles.addBtn} onPress={() => navigation.navigate('PublishBag')}>
+          <TouchableOpacity style={styles.addBtn} onPress={openPublishBag}>
             <Ionicons name="add" size={16} color={theme.COLORS.primary} />
             <Text style={styles.addBtnText}>Yeni çanta</Text>
           </TouchableOpacity>
@@ -147,7 +171,7 @@ const BusinessDashboardScreen = ({ navigation }: any) => {
             <Text style={styles.emptyBagDesc}>
               Kalan ürünlerini değerlendirmek ve israfı önlemek için hemen yeni bir sürpriz çanta yayınlayabilirsin.
             </Text>
-            <TouchableOpacity style={styles.emptyBagBtn} onPress={() => navigation.navigate('PublishBag')}>
+            <TouchableOpacity style={styles.emptyBagBtn} onPress={openPublishBag}>
               <Ionicons name="add" size={18} color={theme.COLORS.card} />
               <Text style={styles.emptyBagBtnText}>Çanta Yayınla</Text>
             </TouchableOpacity>
@@ -254,6 +278,10 @@ const styles = StyleSheet.create({
   scrollContent: { paddingHorizontal: theme.SIZES.l, paddingBottom: 100 },
   welcomeText: { ...theme.FONTS.h1, color: theme.COLORS.text },
   dateText: { ...theme.FONTS.caption, color: theme.COLORS.textSecondary, marginBottom: theme.SIZES.l },
+  profileLink: { flexDirection: 'row', alignItems: 'center', gap: theme.SIZES.m, padding: theme.SIZES.m, marginBottom: theme.SIZES.xl, backgroundColor: theme.COLORS.card, borderRadius: theme.SIZES.radius, borderWidth: 1, borderColor: theme.COLORS.border, minHeight: 64 },
+  profileLinkInfo: { flex: 1 },
+  profileLinkTitle: { ...theme.FONTS.body2, fontWeight: '600', color: theme.COLORS.text, marginBottom: 2 },
+  profileLinkDescription: { ...theme.FONTS.caption, color: theme.COLORS.textSecondary },
   statsRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: theme.SIZES.xl },
   statBox: { backgroundColor: theme.COLORS.card, padding: theme.SIZES.m, borderRadius: theme.SIZES.radius, flex: 1, marginHorizontal: 4, alignItems: 'center', borderWidth: 1, borderColor: theme.COLORS.border },
   statNumber: { ...theme.FONTS.h2, color: theme.COLORS.text, marginBottom: 4 },

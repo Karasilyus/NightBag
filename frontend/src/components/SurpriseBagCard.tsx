@@ -107,7 +107,11 @@ const SurpriseBagCard: React.FC<SurpriseBagCardProps> = (props) => {
       ]}
       onPress={() => navigation.navigate('BagDetails', { bag: { id: props.id, businessId: props.businessId, businessName, bagType, distance, timeInfo, price, originalPrice, imageUrl, remainingBags } })}
     >
-      <View style={styles.imageContainer}>
+      <View style={[
+        styles.imageContainer,
+        isMapCard && styles.mapCardImageContainer,
+        isMapSidebarCard && styles.mapSidebarImageContainer,
+      ]}>
         <Image source={{ uri: imageUrl }} style={styles.image} />
         
         {/* Sol Üst Etiket */}
@@ -131,7 +135,11 @@ const SurpriseBagCard: React.FC<SurpriseBagCardProps> = (props) => {
         </TouchableOpacity>
       </View>
 
-      <View style={styles.content}>
+      <View style={[
+        styles.content,
+        isMapCard && styles.mapCardContent,
+        isMapSidebarCard && styles.mapSidebarContent,
+      ]}>
         <Text style={styles.businessName}>{businessName}</Text>
         <Text style={styles.bagInfo}>{bagType} • {distance}</Text>
         
@@ -166,13 +174,25 @@ const styles = StyleSheet.create({
     borderColor: theme.COLORS.border,
   },
   mapCard: {
-    width: 280,
-    marginRight: theme.SIZES.m,
+    width: 220,
+    marginRight: theme.SIZES.s,
     marginBottom: 0,
   },
   mapSidebarCard: {
     width: '100%',
     marginBottom: theme.SIZES.m,
+  },
+  mapCardImageContainer: {
+    height: 104,
+  },
+  mapSidebarImageContainer: {
+    height: 128,
+  },
+  mapCardContent: {
+    padding: theme.SIZES.s,
+  },
+  mapSidebarContent: {
+    padding: theme.SIZES.m,
   },
   imageContainer: {
     width: '100%',

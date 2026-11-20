@@ -37,6 +37,14 @@ const mapBusinessOrder = (reservation: BusinessReservation) => ({
 });
 
 export const businessService = {
+  getCurrentBusinessId: async (): Promise<string> => {
+    const response = await apiClient.get<BusinessResponse>('/business/me');
+    if (!response.data?.id) {
+      throw new Error('İşletme bilgisi yanıtı geçersiz.');
+    }
+    return response.data.id;
+  },
+
   /**
    * İşletme genel bakış istatistiklerini getirir.
    * BusinessDashboardScreen'de kullanılır.

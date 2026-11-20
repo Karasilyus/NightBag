@@ -37,16 +37,13 @@ export const reservationService = {
    * MyOrdersScreen'de kullanılır.
    */
   getReservations: async (statusFilter: string = 'Tümü'): Promise<{ data: any[] }> => {
-    try {
-      const response = await apiClient.get('/reservations', {
-        params: { status: tabToScope(statusFilter) },
-      });
-      const reservations = response.data || [];
-      return { data: reservations.map(mapReservation) };
-    } catch (error) {
-      console.error('Rezervasyonlar yüklenemedi:', error);
-      return { data: [] };
+    const response = await apiClient.get('/reservations', {
+      params: { status: tabToScope(statusFilter) },
+    });
+    if (!Array.isArray(response.data)) {
+      throw new Error('Rezervasyon listesi yanıtı geçersiz.');
     }
+    return { data: response.data.map(mapReservation) };
   },
 
   /**

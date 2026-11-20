@@ -6,31 +6,22 @@ import { reservationService } from '../services/reservation.service';
 
 const CheckoutScreen = ({ route, navigation }: any) => {
   const bag = route?.params?.bag;
-  const currentBag = bag || {
-    id: '',
-    businessName: 'Moda Fırını',
-    bagType: 'Fırın sürpriz çantası',
-    price: 125,
-    originalPrice: 350,
-    timeInfo: 'Bugün, 20.00-21.00',
-    imageUrl: 'https://images.unsplash.com/photo-1509440159596-0249088772ff?q=80&w=1000&auto=format&fit=crop',
-    distance: 'Kadıköy',
-  };
-
   const [quantity, setQuantity] = useState(1);
+  const [paymentPreference, setPaymentPreference] = useState<'pickup' | 'online'>('pickup');
   const [isReserving, setIsReserving] = useState(false);
-  const pricePerBag = currentBag.price;
+  const isOnlinePayment = paymentPreference === 'online';
+  const hasStockInfo = Number.isFinite(bag?.remainingBags);
+  const maxQuantity = hasStockInfo
+    ? Math.min(4, Math.max(0, Math.floor(bag.remainingBags)))
+    : 0;
+  const pricePerBag = Number.isFinite(bag?.price) ? bag.price : 0;
 
   const handleConfirmReservation = async () => {
+    if (!bag?.id || maxQuantity === 0 || isOnlinePayment) return;
     setIsReserving(true);
     try {
-      if (currentBag.id) {
-        const res = await reservationService.reserve(currentBag.id, quantity);
-        navigation.navigate('ReservationConfirmed', { reservation: res });
-      } else {
-        // ID olmadan doğrudan geçiş yapıldıysa statik veriyle yönlendir
-        navigation.navigate('ReservationConfirmed');
-      }
+      const reservation = await reservationService.reserve(bag.id, quantity);
+      navigation.navigate('ReservationConfirmed', { reservation });
     } catch (error: any) {
       const errMsg = error.response?.data?.error || error.message || 'Rezervasyon oluşturulamadı. Lütfen tekrar deneyin.';
       Alert.alert('Rezervasyon Hatası', errMsg);
@@ -38,6 +29,21 @@ const CheckoutScreen = ({ route, navigation }: any) => {
       setIsReserving(false);
     }
   };
+
+  if (!bag?.id || !Number.isFinite(bag.price)) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.invalidBagContent}>
+          <Ionicons name="alert-circle-outline" size={44} color={theme.COLORS.error} />
+          <Text style={styles.invalidBagTitle}>Çanta bilgisi bulunamadı</Text>
+          <Text style={styles.invalidBagText}>Rezervasyona devam etmek için çanta detayına geri dön.</Text>
+          <TouchableOpacity style={styles.invalidBagButton} onPress={() => navigation.goBack()} accessibilityRole="button">
+            <Text style={styles.invalidBagButtonText}>Geri dön</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -55,18 +61,18 @@ const CheckoutScreen = ({ route, navigation }: any) => {
 
         {/* Çanta Özeti Kartı */}
         <View style={styles.bagCard}>
-          <Image 
-            source={{ uri: currentBag.imageUrl }} 
+          <Image
+            source={{ uri: bag.imageUrl }}
             style={styles.cardImage} 
           />
           <View style={styles.cardInfo}>
-            <Text style={styles.businessName}>{currentBag.businessName}</Text>
-            <Text style={styles.bagTitle}>{currentBag.bagType}</Text>
+            <Text style={styles.businessName}>{bag.businessName}</Text>
+            <Text style={styles.bagTitle}>{bag.bagType}</Text>
             <View style={styles.priceRow}>
               <Text style={styles.price}>{pricePerBag} ₺</Text>
-              <Text style={styles.originalPrice}>{currentBag.originalPrice} ₺</Text>
+              <Text style={styles.originalPrice}>{bag.originalPrice} ₺</Text>
             </View>
-            <Text style={styles.timeInfo}>{currentBag.timeInfo}</Text>
+            <Text style={styles.timeInfo}>{bag.timeInfo}</Text>
           </View>
         </View>
 
@@ -74,7 +80,11 @@ const CheckoutScreen = ({ route, navigation }: any) => {
         <View style={styles.quantitySection}>
           <View>
             <Text style={styles.sectionTitle}>Çanta adedi</Text>
-            <Text style={styles.quantityDesc}>En fazla 4 çanta</Text>
+            <Text style={styles.quantityDesc}>
+              {maxQuantity > 0
+                ? `En fazla ${maxQuantity} çanta`
+                : hasStockInfo ? 'Stok kalmamış' : 'Stok bilgisi alınamadı'}
+            </Text>
           </View>
           <View style={styles.quantityControl}>
             <TouchableOpacity 
@@ -87,10 +97,10 @@ const CheckoutScreen = ({ route, navigation }: any) => {
             <Text style={styles.qText}>{quantity}</Text>
             <TouchableOpacity 
               style={[styles.qBtn, quantity >= 4 && styles.qBtnDisabled]} 
-              onPress={() => setQuantity(Math.min(4, quantity + 1))}
-              disabled={quantity >= 4 || isReserving}
+              onPress={() => setQuantity(Math.min(maxQuantity, quantity + 1))}
+              disabled={quantity >= maxQuantity || isReserving}
             >
-              <Ionicons name="add" size={20} color={theme.COLORS.primary} />
+              <Ionicons name="add" size={20} color={quantity >= maxQuantity ? theme.COLORS.border : theme.COLORS.primary} />
             </TouchableOpacity>
           </View>
         </View>
@@ -101,8 +111,8 @@ const CheckoutScreen = ({ route, navigation }: any) => {
           <View style={styles.infoRow}>
             <Ionicons name="calendar-outline" size={20} color={theme.COLORS.text} />
             <View style={styles.infoTextContainer}>
-              <Text style={styles.infoBold}>{currentBag.timeInfo}</Text>
-              <Text style={styles.infoLight}>{currentBag.businessName}</Text>
+              <Text style={styles.infoBold}>{bag.timeInfo}</Text>
+              <Text style={styles.infoLight}>{bag.businessName}</Text>
             </View>
           </View>
           <View style={styles.infoRow}>
@@ -117,12 +127,51 @@ const CheckoutScreen = ({ route, navigation }: any) => {
         {/* Toplam Tutar */}
         <View style={styles.totalSection}>
           <View style={styles.totalRow}>
-            <Text style={styles.totalLabel}>{quantity} × {currentBag.bagType}</Text>
+            <Text style={styles.totalLabel}>{quantity} × {bag.bagType}</Text>
             <Text style={styles.totalValue}>{quantity * pricePerBag} ₺</Text>
           </View>
           <View style={styles.totalSummaryRow}>
             <Text style={styles.totalSummaryLabel}>Toplam</Text>
             <Text style={styles.totalSummaryValue}>{quantity * pricePerBag} ₺</Text>
+          </View>
+
+          <View style={styles.paymentSection}>
+            <Text style={styles.sectionTitle}>Ödeme tercihi</Text>
+            <TouchableOpacity
+              style={[styles.paymentOption, paymentPreference === 'pickup' && styles.paymentOptionSelected]}
+              onPress={() => setPaymentPreference('pickup')}
+              accessibilityRole="button"
+              accessibilityState={{ selected: paymentPreference === 'pickup' }}
+            >
+              <Ionicons name="storefront-outline" size={20} color={theme.COLORS.primary} />
+              <View style={styles.paymentOptionInfo}>
+                <Text style={styles.paymentOptionTitle}>İşletmede ödeme</Text>
+                <Text style={styles.paymentOptionDescription}>Tercih bu oturumda tutulur; sunucuya iletilmiyor</Text>
+              </View>
+              {paymentPreference === 'pickup'
+                ? <Ionicons name="checkmark-circle" size={20} color={theme.COLORS.primary} />
+                : null}
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.paymentOption, paymentPreference === 'online' && styles.paymentOptionSelected]}
+              onPress={() => setPaymentPreference('online')}
+              accessibilityRole="button"
+              accessibilityState={{ selected: paymentPreference === 'online' }}
+            >
+              <Ionicons name="card-outline" size={20} color={paymentPreference === 'online' ? theme.COLORS.primary : theme.COLORS.textSecondary} />
+              <View style={styles.paymentOptionInfo}>
+                <Text style={paymentPreference === 'online' ? styles.paymentOptionTitle : styles.paymentOptionDisabledTitle}>Online ödeme</Text>
+                <Text style={styles.paymentOptionDescription}>Ödeme sağlayıcısı ve sunucu bağlantısı henüz yok</Text>
+              </View>
+              {paymentPreference === 'online'
+                ? <Ionicons name="checkmark-circle" size={20} color={theme.COLORS.primary} />
+                : <Text style={styles.comingSoon}>Yakında</Text>}
+            </TouchableOpacity>
+            <Text style={styles.paymentDisclaimer}>
+              {isOnlinePayment
+                ? 'Online ödeme henüz etkin değil. Bu seçiliyken rezervasyon oluşturulmaz; kart bilgisi istenmez ve ödeme tahsil edilmez.'
+                : 'Ödeme arayüzü şimdilik taslaktır. Rezervasyon servisi ödeme tercihi almıyor; kart bilgisi istenmez ve ödeme tahsil edilmez.'}
+            </Text>
           </View>
           
           <View style={styles.agreementBox}>
@@ -138,20 +187,28 @@ const CheckoutScreen = ({ route, navigation }: any) => {
       {/* Alt Sabit Bar */}
       <View style={styles.bottomBar}>
         <TouchableOpacity 
-          style={[styles.confirmBtn, isReserving && { opacity: 0.7 }]} 
+          style={[styles.confirmBtn, (isReserving || maxQuantity === 0 || isOnlinePayment) && { opacity: 0.7 }]}
           onPress={handleConfirmReservation}
-          disabled={isReserving}
+          disabled={isReserving || maxQuantity === 0 || isOnlinePayment}
         >
           {isReserving ? (
             <ActivityIndicator color={theme.COLORS.card} />
           ) : (
             <>
-              <Text style={styles.confirmBtnText}>Rezervasyonu onayla</Text>
-              <Ionicons name="arrow-forward" size={20} color={theme.COLORS.card} />
+              <Text style={styles.confirmBtnText}>
+                {isOnlinePayment
+                  ? 'Online ödeme kullanılamıyor'
+                  : maxQuantity > 0 ? 'Rezervasyonu onayla' : hasStockInfo ? 'Stok tükendi' : 'Stok bilgisi yok'}
+              </Text>
+              {!isOnlinePayment ? <Ionicons name="arrow-forward" size={20} color={theme.COLORS.card} /> : null}
             </>
           )}
         </TouchableOpacity>
-        <Text style={styles.bottomNote}>Bu adımda ödeme alınmaz.</Text>
+        <Text style={styles.bottomNote}>
+          {isOnlinePayment
+            ? 'Online ödeme bağlantısı tamamlanana kadar rezervasyon oluşturulmaz.'
+            : 'Rezervasyon oluşturulur; bu adımda ödeme alınmaz.'}
+        </Text>
       </View>
     </SafeAreaView>
   );
@@ -332,6 +389,56 @@ const styles = StyleSheet.create({
     ...theme.FONTS.h2,
     color: theme.COLORS.text,
   },
+  paymentSection: {
+    marginBottom: theme.SIZES.l,
+  },
+  paymentOption: {
+    minHeight: 68,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.SIZES.s,
+    padding: theme.SIZES.m,
+    marginTop: theme.SIZES.s,
+    borderRadius: theme.SIZES.radius,
+    borderWidth: 1,
+    borderColor: theme.COLORS.border,
+    backgroundColor: theme.COLORS.card,
+  },
+  paymentOptionSelected: {
+    borderColor: theme.COLORS.primary,
+    backgroundColor: theme.COLORS.tagBackground,
+  },
+  paymentOptionInfo: {
+    flex: 1,
+  },
+  paymentOptionTitle: {
+    ...theme.FONTS.body2,
+    fontWeight: '600',
+    color: theme.COLORS.primary,
+    marginBottom: 3,
+  },
+  paymentOptionDisabledTitle: {
+    ...theme.FONTS.body2,
+    fontWeight: '600',
+    color: theme.COLORS.textSecondary,
+    marginBottom: 3,
+  },
+  paymentOptionDescription: {
+    ...theme.FONTS.caption,
+    color: theme.COLORS.textSecondary,
+    lineHeight: 17,
+  },
+  comingSoon: {
+    ...theme.FONTS.caption,
+    fontWeight: '600',
+    color: theme.COLORS.textSecondary,
+  },
+  paymentDisclaimer: {
+    ...theme.FONTS.caption,
+    color: theme.COLORS.textSecondary,
+    lineHeight: 18,
+    marginTop: theme.SIZES.s,
+  },
   agreementBox: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -375,6 +482,36 @@ const styles = StyleSheet.create({
     ...theme.FONTS.caption,
     color: theme.COLORS.textSecondary,
     textAlign: 'center',
+  },
+  invalidBagContent: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: theme.SIZES.xl,
+  },
+  invalidBagTitle: {
+    ...theme.FONTS.h3,
+    color: theme.COLORS.text,
+    marginTop: theme.SIZES.m,
+    marginBottom: theme.SIZES.s,
+  },
+  invalidBagText: {
+    ...theme.FONTS.body2,
+    color: theme.COLORS.textSecondary,
+    textAlign: 'center',
+    marginBottom: theme.SIZES.l,
+  },
+  invalidBagButton: {
+    minHeight: 44,
+    justifyContent: 'center',
+    paddingHorizontal: theme.SIZES.l,
+    borderRadius: theme.SIZES.buttonRadius,
+    backgroundColor: theme.COLORS.primary,
+  },
+  invalidBagButtonText: {
+    ...theme.FONTS.body2,
+    color: theme.COLORS.card,
+    fontWeight: '600',
   },
 });
 

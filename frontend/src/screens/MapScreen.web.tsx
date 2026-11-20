@@ -12,6 +12,8 @@ const MapScreen = ({ navigation }: any) => {
   const { width } = useWindowDimensions();
   const [bags, setBags] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const [retryCount, setRetryCount] = useState(0);
   const [mapCenter, setMapCenter] = useState({ latitude: 40.9845, longitude: 29.026 });
   const [preferences, setPreferences] = useState<UserPreferences>({
     searchRadiusKm: 5,
@@ -35,8 +37,10 @@ const MapScreen = ({ navigation }: any) => {
   }, [navigation]);
 
   useEffect(() => {
+    let isCancelled = false;
     const timeout = setTimeout(async () => {
       setIsLoading(true);
+      setLoadError('');
       try {
         const response = await bagService.getBags(
           'Tümü',
@@ -45,15 +49,22 @@ const MapScreen = ({ navigation }: any) => {
           mapCenter.longitude,
           preferences.searchRadiusKm * 1000
         );
-        setBags(response.data);
+        if (!isCancelled) setBags(response.data);
       } catch (error) {
-        console.error(error);
+        console.error('Harita çantaları yüklenemedi:', error);
+        if (!isCancelled) {
+          setBags([]);
+          setLoadError('Çantalar yüklenemedi. Bağlantını kontrol edip tekrar dene.');
+        }
       } finally {
-        setIsLoading(false);
+        if (!isCancelled) setIsLoading(false);
       }
     }, 350);
-    return () => clearTimeout(timeout);
-  }, [mapCenter.latitude, mapCenter.longitude, preferences.searchRadiusKm]);
+    return () => {
+      isCancelled = true;
+      clearTimeout(timeout);
+    };
+  }, [mapCenter.latitude, mapCenter.longitude, preferences.searchRadiusKm, retryCount]);
 
   const handleCenterChange = (nextCenter: { latitude: number; longitude: number }) => {
     setMapCenter((currentCenter) => (
@@ -104,6 +115,15 @@ const MapScreen = ({ navigation }: any) => {
         <Text style={styles.listTitle}>Yakındaki çantalar</Text>
         {isLoading ? (
           <ActivityIndicator size="large" color={theme.COLORS.primary} style={styles.loadingIndicator} />
+        ) : loadError ? (
+          <View style={styles.listMessage}>
+            <Text style={styles.listMessageText}>{loadError}</Text>
+            <TouchableOpacity onPress={() => setRetryCount((count) => count + 1)} accessibilityRole="button">
+              <Text style={styles.retryText}>Tekrar dene</Text>
+            </TouchableOpacity>
+          </View>
+        ) : bags.length === 0 ? (
+          <Text style={styles.listMessageText}>Bu bölgede uygun çanta bulunamadı.</Text>
         ) : (
           <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
             {bags.map((item) => (
@@ -210,6 +230,21 @@ const styles = StyleSheet.create({
   },
   loadingIndicator: {
     marginTop: theme.SIZES.xl,
+  },
+  listMessage: {
+    alignItems: 'center',
+    padding: theme.SIZES.m,
+  },
+  listMessageText: {
+    ...theme.FONTS.body2,
+    color: theme.COLORS.textSecondary,
+    textAlign: 'center',
+  },
+  retryText: {
+    ...theme.FONTS.body2,
+    color: theme.COLORS.primary,
+    fontWeight: '700',
+    paddingTop: theme.SIZES.s,
   },
 });
 

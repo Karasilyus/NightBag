@@ -1,11 +1,20 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, SafeAreaView, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, SafeAreaView, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import theme from '../constants/theme';
 import { preferencesService } from '../services/preferences.service';
 
 const BagDetailScreen = ({ route, navigation }: any) => {
   const bag = route.params?.bag;
+  const contentTags: string[] = Array.isArray(bag?.contentTags)
+    ? bag.contentTags.filter((tag: unknown): tag is string => typeof tag === 'string' && tag.trim().length > 0)
+    : [];
+  const description = typeof bag?.description === 'string' && bag.description.trim()
+    ? bag.description
+    : 'İşletme bu çanta için açıklama paylaşmadı.';
+  const allergenNote = typeof bag?.allergenNote === 'string' && bag.allergenNote.trim()
+    ? bag.allergenNote
+    : 'Alerjen bilgisi paylaşılmamış. Alerjin varsa rezervasyondan önce işletmeye danış.';
   const [isSaved, setIsSaved] = useState(false);
 
   useEffect(() => {
@@ -33,8 +42,12 @@ const BagDetailScreen = ({ route, navigation }: any) => {
 
   if (!bag) {
     return (
-      <SafeAreaView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-        <ActivityIndicator size="large" color={theme.COLORS.primary} />
+      <SafeAreaView style={[styles.container, styles.missingBagContainer]}>
+        <Ionicons name="alert-circle-outline" size={44} color={theme.COLORS.error} />
+        <Text style={styles.missingBagTitle}>Çanta bilgisi bulunamadı</Text>
+        <TouchableOpacity style={styles.missingBagButton} onPress={() => navigation.goBack()} accessibilityRole="button">
+          <Text style={styles.missingBagButtonText}>Geri dön</Text>
+        </TouchableOpacity>
       </SafeAreaView>
     );
   }
@@ -68,9 +81,7 @@ const BagDetailScreen = ({ route, navigation }: any) => {
         <View style={styles.content}>
           <Text style={styles.businessName}>{bag.businessName}</Text>
           <Text style={styles.title}>{bag.bagType}</Text>
-          <Text style={styles.description}>
-            Mahallenin işletmesinden, günün son lezzetleri.
-          </Text>
+          <Text style={styles.description}>{description}</Text>
 
           <View style={styles.infoRow}>
             <Ionicons name="sparkles" size={20} color={theme.COLORS.primary} />
@@ -80,22 +91,23 @@ const BagDetailScreen = ({ route, navigation }: any) => {
             İçerik, gün sonunda kalanlara göre değişir. Belirli bir ürün ya da miktar garanti edilmez.
           </Text>
 
-          {/* Çanta İçeriği Etiketleri */}
-          <Text style={styles.sectionTitle}>Çantada bulunabilecekler</Text>
-          <View style={styles.tagsContainer}>
-            {['Ekmek', 'Hamur İşi', 'Tatlı'].map((item, index) => (
-              <View key={index} style={styles.categoryTag}>
-                <Text style={styles.categoryTagText}>{item}</Text>
+          {contentTags.length > 0 && (
+            <>
+              <Text style={styles.sectionTitle}>Çantada bulunabilecekler</Text>
+              <View style={styles.tagsContainer}>
+                {contentTags.map((item) => (
+                  <View key={item} style={styles.categoryTag}>
+                    <Text style={styles.categoryTagText}>{item}</Text>
+                  </View>
+                ))}
               </View>
-            ))}
-          </View>
+            </>
+          )}
 
           {/* Uyarı Kutusu */}
           <View style={styles.warningBox}>
             <Ionicons name="warning-outline" size={20} color={theme.COLORS.textSecondary} />
-            <Text style={styles.warningText}>
-              Glüten, süt, yumurta ve kuruyemiş içerebilir. Alerjin varsa ayırtmadan önce işletmeye danış.
-            </Text>
+            <Text style={styles.warningText}>{allergenNote}</Text>
           </View>
 
           {/* Teslimat Bilgisi */}
@@ -107,7 +119,9 @@ const BagDetailScreen = ({ route, navigation }: any) => {
               <Text style={styles.deliveryLabel}>TESLİM ALMA ZAMANI</Text>
               <Text style={styles.deliveryTime}>{bag.timeInfo}</Text>
               <Text style={styles.deliveryAddress}>{bag.businessName}</Text>
-              <Text style={styles.deliveryAddressDetail}>Kadıköy ({bag.distance})</Text>
+              <Text style={styles.deliveryAddressDetail}>
+                {bag.distance ? `Mesafe: ${bag.distance}` : 'Konum bilgisi paylaşılmamış'}
+              </Text>
               <TouchableOpacity onPress={() => navigation.navigate('MainFlow', { screen: 'Map' } as any)}>
                 <Text style={styles.mapLink}>İşletmeyi gör {'>'}</Text>
               </TouchableOpacity>
@@ -138,6 +152,28 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: theme.COLORS.card,
+  },
+  missingBagContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: theme.SIZES.xl,
+  },
+  missingBagTitle: {
+    ...theme.FONTS.h3,
+    color: theme.COLORS.text,
+    marginVertical: theme.SIZES.m,
+  },
+  missingBagButton: {
+    minHeight: 44,
+    justifyContent: 'center',
+    paddingHorizontal: theme.SIZES.l,
+    borderRadius: theme.SIZES.buttonRadius,
+    backgroundColor: theme.COLORS.primary,
+  },
+  missingBagButtonText: {
+    ...theme.FONTS.body2,
+    color: theme.COLORS.card,
+    fontWeight: '600',
   },
   header: {
     flexDirection: 'row',

@@ -12,8 +12,11 @@ const CATEGORIES = ['Tümü', 'Fırın', 'Kafe', 'Tatlı', 'Yemek'];
 const HomeScreen = ({ navigation }: any) => {
   const [activeCategory, setActiveCategory] = useState('Tümü');
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
   const [bags, setBags] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const [retryCount, setRetryCount] = useState(0);
   const [preferences, setPreferences] = useState<UserPreferences>({
     searchRadiusKm: 5,
     notificationsEnabled: true,
@@ -49,26 +52,47 @@ const HomeScreen = ({ navigation }: any) => {
   };
 
   useEffect(() => {
+    const timeout = setTimeout(() => setDebouncedSearchQuery(searchQuery), 300);
+    return () => clearTimeout(timeout);
+  }, [searchQuery]);
+
+  useEffect(() => {
     const fetchBags = async () => {
       setIsLoading(true);
+      setLoadError('');
       try {
         const response = await bagService.getBags(
           activeCategory,
-          searchQuery,
+          debouncedSearchQuery,
           preferences.location?.latitude,
           preferences.location?.longitude,
           preferences.searchRadiusKm * 1000
         );
-        setBags(response.data);
+        if (!isCancelled) setBags(response.data);
       } catch (error) {
         console.error("Çantalar yüklenemedi", error);
+        if (!isCancelled) {
+          setBags([]);
+          setLoadError('Çantalar yüklenemedi. Bağlantını kontrol edip tekrar dene.');
+        }
       } finally {
-        setIsLoading(false);
+        if (!isCancelled) setIsLoading(false);
       }
     };
 
+    let isCancelled = false;
     fetchBags();
-  }, [activeCategory, searchQuery, preferences]);
+    return () => {
+      isCancelled = true;
+    };
+  }, [
+    activeCategory,
+    debouncedSearchQuery,
+    preferences.location?.latitude,
+    preferences.location?.longitude,
+    preferences.searchRadiusKm,
+    retryCount,
+  ]);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -143,6 +167,17 @@ const HomeScreen = ({ navigation }: any) => {
         <View style={[styles.cardsContainer, Platform.OS === 'web' && width >= 700 && styles.webCardsContainer]}>
           {isLoading ? (
             <ActivityIndicator size="large" color={theme.COLORS.primary} style={{ marginTop: 40 }} />
+          ) : loadError ? (
+            <View style={styles.emptyContainer}>
+              <Text style={styles.errorText}>{loadError}</Text>
+              <TouchableOpacity
+                style={styles.retryButton}
+                onPress={() => setRetryCount((count) => count + 1)}
+                accessibilityRole="button"
+              >
+                <Text style={styles.retryButtonText}>Tekrar dene</Text>
+              </TouchableOpacity>
+            </View>
           ) : displayedBags.length > 0 ? (
             displayedBags.map((item) => (
               <SurpriseBagCard
@@ -295,6 +330,24 @@ const styles = StyleSheet.create({
     color: theme.COLORS.textSecondary,
     textAlign: 'center',
     marginTop: theme.SIZES.m,
+  },
+  errorText: {
+    ...theme.FONTS.body2,
+    color: theme.COLORS.error,
+    textAlign: 'center',
+    marginBottom: theme.SIZES.m,
+  },
+  retryButton: {
+    minHeight: 44,
+    justifyContent: 'center',
+    paddingHorizontal: theme.SIZES.l,
+    borderRadius: theme.SIZES.buttonRadius,
+    backgroundColor: theme.COLORS.primary,
+  },
+  retryButtonText: {
+    ...theme.FONTS.body2,
+    color: theme.COLORS.card,
+    fontWeight: '600',
   },
 });
 

@@ -22,6 +22,7 @@ interface WebMapCanvasProps {
   radiusKm?: number;
   onSelectLocation?: (coordinate: MapCoordinate) => void;
   onCenterChange?: (coordinate: MapCoordinate) => void;
+  onMapReadyChange?: (isReady: boolean) => void;
   style?: ViewStyle;
 }
 
@@ -105,6 +106,7 @@ const WebMapCanvas = ({
   radiusKm = 2,
   onSelectLocation,
   onCenterChange,
+  onMapReadyChange,
   style,
 }: WebMapCanvasProps) => {
   const mapElement = useRef<HTMLDivElement>(null);
@@ -114,6 +116,7 @@ const WebMapCanvas = ({
   const renderedMarkers = useRef<GoogleMapMarker[]>([]);
   const onSelectLocationRef = useRef(onSelectLocation);
   const onCenterChangeRef = useRef(onCenterChange);
+  const onMapReadyChangeRef = useRef(onMapReadyChange);
   const previousCenter = useRef(center);
   const previousRadiusKm = useRef(radiusKm);
   const [mapApi, setMapApi] = useState<GoogleMapsApi | null>(null);
@@ -131,8 +134,15 @@ const WebMapCanvas = ({
   }, [onCenterChange]);
 
   useEffect(() => {
+    onMapReadyChangeRef.current = onMapReadyChange;
+  }, [onMapReadyChange]);
+
+  useEffect(() => {
     let isMounted = true;
-    if (!apiKey) return () => { isMounted = false; };
+    if (!apiKey) {
+      onMapReadyChangeRef.current?.(false);
+      return () => { isMounted = false; };
+    }
 
     loadGoogleMaps(apiKey)
       .then((maps) => {
@@ -143,7 +153,10 @@ const WebMapCanvas = ({
       })
       .catch((error: unknown) => {
         console.error('Google Maps başlatılamadı:', error);
-        if (isMounted) setErrorMessage('Harita yüklenemedi. API anahtarını ve alan adı kısıtlarını kontrol edin.');
+        if (isMounted) {
+          setErrorMessage('Harita yüklenemedi. API anahtarını ve alan adı kısıtlarını kontrol edin.');
+          onMapReadyChangeRef.current?.(false);
+        }
       });
 
     return () => {
@@ -181,8 +194,10 @@ const WebMapCanvas = ({
         longitude: currentCenter.lng(),
       });
     });
+    onMapReadyChangeRef.current?.(true);
 
     return () => {
+      onMapReadyChangeRef.current?.(false);
       mapClickListener.current?.remove();
       mapClickListener.current = null;
       mapIdleListener.current?.remove();

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, TextInput, ActivityIndicator, Alert, KeyboardAvoidingView, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import theme from '../constants/theme';
@@ -14,6 +14,10 @@ const CATEGORY_ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
 const QUANTITY_PRESETS = [1, 5, 10, 20];
 
 const CreateBagScreen = ({ route, navigation }: any) => {
+  const routeBusinessId = route?.params?.businessId;
+  const [loadedBusinessId, setLoadedBusinessId] = useState<string | undefined>();
+  const [businessIdError, setBusinessIdError] = useState('');
+  const [businessLoadAttempt, setBusinessLoadAttempt] = useState(0);
   const [activeCategory, setActiveCategory] = useState('Fırın');
   const [originalPrice, setOriginalPrice] = useState('350');
   const [price, setPrice] = useState('125');
@@ -28,6 +32,25 @@ const CreateBagScreen = ({ route, navigation }: any) => {
   const discountPercent = parsedOriginalPrice > 0 && parsedPrice > 0
     ? Math.max(0, Math.round((1 - parsedPrice / parsedOriginalPrice) * 100))
     : 0;
+  const businessId = routeBusinessId || loadedBusinessId;
+
+  useEffect(() => {
+    let isCancelled = false;
+    if (routeBusinessId) return () => { isCancelled = true; };
+    businessService.getCurrentBusinessId()
+      .then((id) => {
+        if (!isCancelled) {
+          setLoadedBusinessId(id);
+          setBusinessIdError('');
+        }
+      })
+      .catch((error) => {
+        console.error('İşletme kimliği yüklenemedi:', error);
+        if (!isCancelled) setBusinessIdError('İşletme bilgisi yüklenemedi.');
+      });
+
+    return () => { isCancelled = true; };
+  }, [routeBusinessId, businessLoadAttempt]);
 
   const getPickupDate = () => {
     const pickupDate = new Date();
@@ -37,9 +60,6 @@ const CreateBagScreen = ({ route, navigation }: any) => {
     const day = String(pickupDate.getDate()).padStart(2, '0');
     return `${year}-${month}-${day}`;
   };
-
-  // Furkan'ın 000002_seed.up.sql dosyasındaki Moda Fırını ID'si varsayılan olarak tanımlandı
-  const businessId = route?.params?.businessId || '33333333-3333-3333-3333-333333333333';
 
   const categoryToApi = (cat: string): string => {
     const map: Record<string, string> = {
@@ -52,6 +72,11 @@ const CreateBagScreen = ({ route, navigation }: any) => {
   };
 
   const handlePublish = async () => {
+    if (!businessId) {
+      Alert.alert('İşletme bilgisi eksik', 'Çantayı yayınlamadan önce işletme paneline dönüp tekrar deneyin.');
+      return;
+    }
+
     const origVal = parseFloat(originalPrice.replace(',', '.'));
     const prVal = parseFloat(price.replace(',', '.'));
 
@@ -385,15 +410,24 @@ const CreateBagScreen = ({ route, navigation }: any) => {
           <View style={styles.bottomSummary}>
             <Text style={styles.bottomSummaryLabel}>YAYINLANACAK</Text>
             <Text style={styles.bottomSummaryValue}>{bagCount} çanta <Text style={styles.bottomSummaryPrice}>· {parsedPrice > 0 ? `${parsedPrice} ₺ / adet` : 'fiyat girin'}</Text></Text>
+            {businessIdError && !businessId ? (
+              <TouchableOpacity onPress={() => setBusinessLoadAttempt((attempt) => attempt + 1)} accessibilityRole="button">
+                <Text style={styles.businessIdError}>{businessIdError} Tekrar dene</Text>
+              </TouchableOpacity>
+            ) : null}
           </View>
           <TouchableOpacity
-            style={[styles.publishBtn, isPublishing && styles.publishBtnDisabled]}
+            style={[styles.publishBtn, (isPublishing || !businessId) && styles.publishBtnDisabled]}
             onPress={handlePublish}
-            disabled={isPublishing}
+            disabled={isPublishing || !businessId}
             accessibilityRole="button"
           >
             {isPublishing ? (
               <ActivityIndicator color={theme.COLORS.card} />
+            ) : !businessId ? (
+              <Text style={styles.publishBtnText}>
+                {businessIdError ? 'İşletme bilgisi gerekli' : 'İşletme yükleniyor'}
+              </Text>
             ) : (
               <>
                 <Ionicons name="paper-plane-outline" size={18} color={theme.COLORS.card} />
@@ -499,6 +533,7 @@ const styles = StyleSheet.create({
   publishBtn: { minHeight: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, paddingHorizontal: theme.SIZES.m, borderRadius: theme.SIZES.buttonRadius, backgroundColor: theme.COLORS.primary },
   publishBtnDisabled: { opacity: 0.65 },
   publishBtnText: { ...theme.FONTS.body2, fontWeight: '700', color: theme.COLORS.card },
+  businessIdError: { ...theme.FONTS.caption, color: theme.COLORS.error, marginTop: theme.SIZES.xs },
 });
 
 export default CreateBagScreen;

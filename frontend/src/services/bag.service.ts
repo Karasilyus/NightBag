@@ -60,23 +60,20 @@ export const bagService = {
     lon: number = 29.0260,
     radius: number = 5000
   ): Promise<{ data: any[] }> => {
-    try {
-      const response = await apiClient.get('/listings/nearby', {
-        params: {
-          lat,
-          lon,
-          radius,
-          category: categoryToApi(category),
-          q: searchQuery.trim(),
-          limit: 50,
-        },
-      });
-      const listings = response.data || [];
-      return { data: listings.map(mapListingToBag) };
-    } catch (error) {
-      console.error('Çantalar yüklenemedi:', error);
-      return { data: [] };
+    const response = await apiClient.get('/listings/nearby', {
+      params: {
+        lat,
+        lon,
+        radius,
+        category: categoryToApi(category),
+        q: searchQuery.trim(),
+        limit: 50,
+      },
+    });
+    if (!Array.isArray(response.data)) {
+      throw new Error('Çanta listesi yanıtı geçersiz.');
     }
+    return { data: response.data.map(mapListingToBag) };
   },
 
   /**

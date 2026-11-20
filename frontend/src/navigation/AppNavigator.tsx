@@ -9,9 +9,16 @@ export type RootStackParamList = {
   Welcome: undefined;
   Auth: undefined;
   PasswordReset: { initialEmail?: string } | undefined;
-  LocationPicker: undefined;
+  LocationPicker: {
+    returnToBusiness?: boolean;
+    returnToProfile?: boolean;
+    returnToMap?: boolean;
+    initialCoordinate?: { latitude: number; longitude: number };
+  } | undefined;
   MainFlow: undefined;
   BusinessFlow: undefined;
+  EditProfile: { userId: string; fullName: string; email: string };
+  BusinessProfile: { businessId?: string; businessName?: string };
   BagDetails: undefined;
   ReservationReview: undefined;
   ReservationConfirmed: undefined;
@@ -26,7 +33,7 @@ export type MainTabParamList = {
 
 export type BusinessTabParamList = {
   Overview: undefined;
-  PublishBag: undefined;
+  PublishBag: { businessId: string } | undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -47,6 +54,8 @@ import CreateBagScreen from '../screens/CreateBagScreen';
 import AuthScreen from '../screens/AuthScreen';
 import PasswordResetScreen from '../screens/PasswordResetScreen';
 import LocationPickerScreen from '../screens/LocationPickerScreen';
+import EditProfileScreen from '../screens/EditProfileScreen';
+import BusinessProfileScreen from '../screens/BusinessProfileScreen';
 
 function MainTabNavigator() {
   return (
@@ -109,6 +118,8 @@ export default function AppNavigator() {
         <Stack.Screen name="LocationPicker" component={LocationPickerScreen} />
         <Stack.Screen name="MainFlow" component={MainTabNavigator} />
         <Stack.Screen name="BusinessFlow" component={BusinessTabNavigator} />
+        <Stack.Screen name="EditProfile" component={EditProfileScreen} />
+        <Stack.Screen name="BusinessProfile" component={BusinessProfileScreen} />
         <Stack.Screen name="BagDetails" component={BagDetailScreen} />
         <Stack.Screen name="ReservationReview" component={CheckoutScreen} />
         <Stack.Screen name="ReservationConfirmed" component={OrderSuccessScreen} />

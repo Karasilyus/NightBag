@@ -11,6 +11,8 @@ const MapScreen = ({ navigation }: any) => {
   const mapRef = useRef<MapView>(null);
   const [bags, setBags] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const [retryCount, setRetryCount] = useState(0);
   const [mapCenter, setMapCenter] = useState({ latitude: 40.9845, longitude: 29.0260 });
   const [preferences, setPreferences] = useState<UserPreferences>({
     searchRadiusKm: 5,
@@ -44,8 +46,10 @@ const MapScreen = ({ navigation }: any) => {
   }, [preferences.location?.latitude, preferences.location?.longitude, preferences.searchRadiusKm]);
 
   useEffect(() => {
+    let isCancelled = false;
     const timeout = setTimeout(async () => {
       setIsLoading(true);
+      setLoadError('');
       try {
         const response = await bagService.getBags(
           'Tümü',
@@ -54,15 +58,22 @@ const MapScreen = ({ navigation }: any) => {
           mapCenter.longitude,
           preferences.searchRadiusKm * 1000
         );
-        setBags(response.data);
+        if (!isCancelled) setBags(response.data);
       } catch (error) {
-        console.error(error);
+        console.error('Harita çantaları yüklenemedi:', error);
+        if (!isCancelled) {
+          setBags([]);
+          setLoadError('Çantalar yüklenemedi. Bağlantını kontrol edip tekrar dene.');
+        }
       } finally {
-        setIsLoading(false);
+        if (!isCancelled) setIsLoading(false);
       }
     }, 350);
-    return () => clearTimeout(timeout);
-  }, [mapCenter.latitude, mapCenter.longitude, preferences.searchRadiusKm]);
+    return () => {
+      isCancelled = true;
+      clearTimeout(timeout);
+    };
+  }, [mapCenter.latitude, mapCenter.longitude, preferences.searchRadiusKm, retryCount]);
 
   const handleRegionChangeComplete = (region: { latitude: number; longitude: number }) => {
     setMapCenter((currentCenter) => (
@@ -86,9 +97,14 @@ const MapScreen = ({ navigation }: any) => {
           longitudeDelta: preferences.searchRadiusKm / 55,
         }}
       >
-        {!isLoading && bags.map((item) => (
+        {!isLoading && !loadError && bags.map((item) => (
           item.coordinate && (
-            <Marker key={item.id} coordinate={item.coordinate}>
+            <Marker
+              key={item.id}
+              coordinate={item.coordinate}
+              onPress={() => navigation.navigate('BagDetails', { bag: item })}
+              accessibilityLabel={`${item.businessName}, ${item.price} ₺`}
+            >
               <View style={styles.customMarker}>
                 <MaterialCommunityIcons name="shopping" size={14} color={theme.COLORS.card} />
                 <Text style={styles.markerText}>{item.price} ₺</Text>
@@ -122,6 +138,17 @@ const MapScreen = ({ navigation }: any) => {
       <View style={styles.bottomListContainer}>
         {isLoading ? (
           <ActivityIndicator size="large" color={theme.COLORS.primary} style={{ marginBottom: 40 }} />
+        ) : loadError ? (
+          <View style={styles.listMessage}>
+            <Text style={styles.listMessageText}>{loadError}</Text>
+            <TouchableOpacity onPress={() => setRetryCount((count) => count + 1)} accessibilityRole="button">
+              <Text style={styles.retryText}>Tekrar dene</Text>
+            </TouchableOpacity>
+          </View>
+        ) : bags.length === 0 ? (
+          <View style={styles.listMessage}>
+            <Text style={styles.listMessageText}>Bu bölgede uygun çanta bulunamadı.</Text>
+          </View>
         ) : (
           <ScrollView
             horizontal
@@ -215,6 +242,25 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: theme.SIZES.m,
+  },
+  listMessage: {
+    alignSelf: 'center',
+    alignItems: 'center',
+    marginHorizontal: theme.SIZES.m,
+    padding: theme.SIZES.m,
+    borderRadius: theme.SIZES.radius,
+    backgroundColor: theme.COLORS.card,
+  },
+  listMessageText: {
+    ...theme.FONTS.body2,
+    color: theme.COLORS.textSecondary,
+    textAlign: 'center',
+  },
+  retryText: {
+    ...theme.FONTS.body2,
+    color: theme.COLORS.primary,
+    fontWeight: '700',
+    paddingTop: theme.SIZES.s,
   },
 });
 

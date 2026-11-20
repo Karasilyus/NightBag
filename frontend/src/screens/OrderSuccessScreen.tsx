@@ -5,13 +5,13 @@ import theme from '../constants/theme';
 
 const OrderSuccessScreen = ({ route, navigation }: any) => {
   const reservation = route?.params?.reservation;
-  const pickupCode = reservation?.code || 'NB-482615';
-  const businessName = reservation?.businessName || 'Moda Fırını';
-  const bagTitle = reservation?.bagTitle || 'Fırın sürpriz çantası';
-  const timeInfo = reservation?.timeInfo || '20.00-21.00';
-  const date = reservation?.date || 'Bugün';
-  const quantity = reservation?.quantity || 1;
-  const price = reservation?.price || 125;
+  const pickupCode = reservation?.code;
+  const businessName = reservation?.businessName || 'İşletme bilgisi alınamadı';
+  const bagTitle = reservation?.bagTitle || 'Çanta bilgisi alınamadı';
+  const timeInfo = reservation?.timeInfo || 'Saat bilgisi alınamadı';
+  const date = reservation?.date || 'Tarih bilgisi alınamadı';
+  const quantity = reservation?.quantity;
+  const price = reservation?.price;
   const imageUrl = reservation?.imageUrl || 'https://images.unsplash.com/photo-1509440159596-0249088772ff?q=80&w=1000&auto=format&fit=crop';
 
   const shareReservation = async () => {
@@ -24,6 +24,25 @@ const OrderSuccessScreen = ({ route, navigation }: any) => {
       Alert.alert('Paylaşım başarısız', 'Rezervasyon bilgileri paylaşılamadı.');
     }
   };
+
+  if (typeof pickupCode !== 'string' || !pickupCode.trim()) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.invalidReservationContent}>
+          <Ionicons name="alert-circle-outline" size={44} color={theme.COLORS.error} />
+          <Text style={styles.title}>Rezervasyon doğrulanamadı</Text>
+          <Text style={styles.subtitle}>Gerçek bir teslim alma kodu alınamadı. Rezervasyon durumunu kontrol et.</Text>
+          <TouchableOpacity
+            style={styles.primaryBtn}
+            onPress={() => navigation.navigate('MainFlow', { screen: 'Reservations' } as any)}
+            accessibilityRole="button"
+          >
+            <Text style={styles.primaryBtnText}>Rezervasyonlarıma git</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -60,7 +79,10 @@ const OrderSuccessScreen = ({ route, navigation }: any) => {
             <View style={styles.cardInfo}>
               <Text style={styles.businessName}>{businessName}</Text>
               <Text style={styles.bagTitle}>{bagTitle}</Text>
-              <Text style={styles.bagDetails}>{quantity} çanta • {price} ₺</Text>
+              <Text style={styles.bagDetails}>
+                {quantity != null ? `${quantity} çanta` : 'Adet bilgisi alınamadı'}
+                {price != null ? ` • ${price} ₺` : ''}
+              </Text>
             </View>
           </View>
 
@@ -68,7 +90,6 @@ const OrderSuccessScreen = ({ route, navigation }: any) => {
             <Text style={styles.codeLabel}>TESLİM ALMA KODUN</Text>
             <View style={styles.codeRow}>
               <Text style={styles.codeText}>{pickupCode}</Text>
-              <Ionicons name="copy-outline" size={20} color={theme.COLORS.primary} />
             </View>
             <Text style={styles.codeHint}>Bu kodu işletmedeki görevliye göster.</Text>
           </View>
@@ -311,6 +332,12 @@ const styles = StyleSheet.create({
     ...theme.FONTS.body1,
     fontWeight: '600',
     color: theme.COLORS.primary,
+  },
+  invalidReservationContent: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: theme.SIZES.xl,
   },
 });
 

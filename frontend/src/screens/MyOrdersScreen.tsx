@@ -12,25 +12,36 @@ const MyOrdersScreen = () => {
   const [activeTab, setActiveTab] = useState('Tümü');
   const [reservations, setReservations] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const [retryCount, setRetryCount] = useState(0);
   const [selectedCode, setSelectedCode] = useState<string | null>(null);
   const [reservationToCancel, setReservationToCancel] = useState<any>(null);
   const [isCancelling, setIsCancelling] = useState(false);
   const [cancellationError, setCancellationError] = useState('');
 
   useEffect(() => {
+    let isCancelled = false;
     const fetchReservations = async () => {
       setIsLoading(true);
+      setLoadError('');
       try {
         const response = await reservationService.getReservations(activeTab);
-        setReservations(response.data);
+        if (!isCancelled) setReservations(response.data);
       } catch (error) {
-        console.error(error);
+        console.error('Rezervasyonlar yüklenemedi:', error);
+        if (!isCancelled) {
+          setReservations([]);
+          setLoadError('Rezervasyonlar yüklenemedi. Bağlantını kontrol edip tekrar dene.');
+        }
       } finally {
-        setIsLoading(false);
+        if (!isCancelled) setIsLoading(false);
       }
     };
     fetchReservations();
-  }, [activeTab]);
+    return () => {
+      isCancelled = true;
+    };
+  }, [activeTab, retryCount]);
 
   const cancelReservation = async () => {
     if (!reservationToCancel?.id) return;
@@ -40,8 +51,7 @@ const MyOrdersScreen = () => {
     try {
       await reservationService.cancelReservation(reservationToCancel.id);
       setReservationToCancel(null);
-      const response = await reservationService.getReservations(activeTab);
-      setReservations(response.data);
+      setRetryCount((count) => count + 1);
     } catch (error) {
       console.error('Rezervasyon iptal edilemedi:', error);
       setCancellationError('Rezervasyon iptal edilemedi. Lütfen tekrar deneyin.');
@@ -72,6 +82,17 @@ const MyOrdersScreen = () => {
       <ScrollView contentContainerStyle={[styles.scrollContent, isWebGrid && styles.webReservations]} showsVerticalScrollIndicator={false}>
         {isLoading ? (
           <ActivityIndicator size="large" color={theme.COLORS.primary} style={{ marginTop: 40 }} />
+        ) : loadError ? (
+          <View style={styles.loadErrorContainer}>
+            <Text style={styles.loadErrorText}>{loadError}</Text>
+            <TouchableOpacity
+              style={styles.retryButton}
+              onPress={() => setRetryCount((count) => count + 1)}
+              accessibilityRole="button"
+            >
+              <Text style={styles.retryButtonText}>Tekrar dene</Text>
+            </TouchableOpacity>
+          </View>
         ) : reservations.length > 0 ? (
           reservations.map((item) => {
             if (item.status === 'active') {
@@ -201,6 +222,10 @@ const styles = StyleSheet.create({
   sectionTitle: { ...theme.FONTS.h3, color: theme.COLORS.text },
   sectionCount: { ...theme.FONTS.caption, color: theme.COLORS.textSecondary },
   modalBackdrop: { flex: 1, justifyContent: 'center', padding: theme.SIZES.l, backgroundColor: 'rgba(0,0,0,0.35)' },
+  loadErrorContainer: { alignItems: 'center', padding: theme.SIZES.xl },
+  loadErrorText: { ...theme.FONTS.body2, color: theme.COLORS.error, textAlign: 'center', marginBottom: theme.SIZES.m },
+  retryButton: { minHeight: 44, justifyContent: 'center', paddingHorizontal: theme.SIZES.l, borderRadius: theme.SIZES.buttonRadius, backgroundColor: theme.COLORS.primary },
+  retryButtonText: { ...theme.FONTS.body2, color: theme.COLORS.card, fontWeight: '600' },
   codeModal: { alignSelf: 'center', width: '100%', maxWidth: 400, alignItems: 'center', padding: theme.SIZES.l, backgroundColor: theme.COLORS.card, borderRadius: theme.SIZES.cardRadius },
   modalTitle: { ...theme.FONTS.h3, color: theme.COLORS.text, marginBottom: theme.SIZES.m },
   modalCode: { ...theme.FONTS.h1, color: theme.COLORS.primary, letterSpacing: 2, marginBottom: theme.SIZES.s },

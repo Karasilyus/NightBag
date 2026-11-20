@@ -16,11 +16,12 @@ const LocationPickerScreen = ({ navigation, route }: any) => {
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
   const [selectedCoordinate, setSelectedCoordinate] = useState({
-    latitude: 40.9845,
-    longitude: 29.0260,
+    latitude: route?.params?.initialCoordinate?.latitude ?? 40.9845,
+    longitude: route?.params?.initialCoordinate?.longitude ?? 29.0260,
   });
 
   useEffect(() => {
+    if (route?.params?.returnToBusiness) return;
     preferencesService.getPreferences()
       .then(({ location }) => {
         if (location) setSelectedCoordinate(location);
@@ -29,7 +30,7 @@ const LocationPickerScreen = ({ navigation, route }: any) => {
         setSaveError('Kayıtlı konum yüklenemedi.');
         console.error('Kayıtlı konum yüklenemedi:', error);
       });
-  }, []);
+  }, [route?.params?.returnToBusiness]);
 
   const handleConfirm = async () => {
     setIsSaving(true);

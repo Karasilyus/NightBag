@@ -1,19 +1,22 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, Image, Modal, Pressable, TextInput, Switch, Linking } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, Image, Modal, Pressable, Switch, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import theme from '../constants/theme';
 import { authService } from '../services/auth.service';
 import { favoritesService } from '../services/favorites.service';
 import { preferencesService, UserPreferences } from '../services/preferences.service';
+import { profileService } from '../services/profile.service';
 
 const PERSONALIZATION_CATEGORIES = ['Fırın', 'Kafe', 'Tatlı', 'Yemek'];
 
 const ProfileScreen = ({ navigation }: any) => {
   const [user, setUser] = useState({ 
+    id: '',
     fullName: 'Misafir', 
     email: '',
     role: '',
     business_id: '',
+    profilePhone: '',
     profileStats: { savedBags: 0, moneySaved: 0 },
     savedBusinesses: [] as any[]
   });
@@ -23,10 +26,7 @@ const ProfileScreen = ({ navigation }: any) => {
     location: null,
     favoriteCategories: [],
   });
-  const [activeModal, setActiveModal] = useState<'edit' | 'location' | 'personalization' | 'privacy' | 'help' | null>(null);
-  const [editedName, setEditedName] = useState('');
-  const [isSavingName, setIsSavingName] = useState(false);
-  const [nameSaveError, setNameSaveError] = useState('');
+  const [activeModal, setActiveModal] = useState<'location' | 'personalization' | 'privacy' | 'help' | null>(null);
   const [supportError, setSupportError] = useState('');
   const [settingsError, setSettingsError] = useState('');
   const canAccessBusinessPanel = user.role === 'business_owner'
@@ -38,27 +38,53 @@ const ProfileScreen = ({ navigation }: any) => {
 
   useEffect(() => {
     const loadUser = async () => {
-      const [currentUser, currentPreferences, stats, favoriteListings] = await Promise.all([
+      const results = await Promise.allSettled([
         authService.getCurrentUser(),
         preferencesService.getPreferences(),
         authService.getCurrentUserStats(),
         favoritesService.getFavorites(),
       ]);
-      setPreferences(currentPreferences);
-      if (currentUser) {
-        setUser({
-          ...currentUser,
-          profileStats: stats,
-          savedBusinesses: favoriteListings.map((listing) => ({
-            id: listing.id,
-            businessId: listing.businessId,
-            name: listing.businessName,
-            type: listing.bagType,
-            distance: listing.distance,
-            imageUrl: listing.imageUrl,
-          })),
-        });
+      const [currentUserResult, preferencesResult, statsResult, favoritesResult] = results;
+      const failures = results.filter((result) => result.status === 'rejected').length;
+      let profileDetails: { fullName: string; phone: string } | null = null;
+      let profileDetailsError = false;
+
+      if (preferencesResult.status === 'fulfilled') setPreferences(preferencesResult.value);
+      if (currentUserResult.status === 'fulfilled' && currentUserResult.value) {
+        try {
+          profileDetails = await profileService.getCustomerDetails(
+            currentUserResult.value.id,
+            currentUserResult.value.fullName
+          );
+        } catch (error) {
+          console.error('Cihazdaki profil alanları yüklenemedi:', error);
+          profileDetailsError = true;
+        }
+        setUser((previous) => ({
+          ...previous,
+          ...currentUserResult.value,
+          fullName: profileDetails?.fullName || currentUserResult.value.fullName,
+          profilePhone: profileDetails?.phone || '',
+          profileStats: statsResult.status === 'fulfilled' ? statsResult.value : previous.profileStats,
+          savedBusinesses: favoritesResult.status === 'fulfilled'
+            ? favoritesResult.value.map((listing) => ({
+                id: listing.id,
+                businessId: listing.businessId,
+                name: listing.businessName,
+                type: listing.bagType,
+                distance: listing.distance,
+                imageUrl: listing.imageUrl,
+              }))
+            : previous.savedBusinesses,
+        }));
       }
+      setSettingsError(
+        profileDetailsError
+            ? 'Bu cihazdaki profil alanları yüklenemedi.'
+            : failures > 0
+              ? 'Profil bilgilerinin bir kısmı yüklenemedi.'
+              : ''
+      );
     };
 
     const refreshUser = () => {
@@ -85,25 +111,6 @@ const ProfileScreen = ({ navigation }: any) => {
       return (words[0][0] + words[1][0]).toUpperCase();
     }
     return name.substring(0, 2).toUpperCase();
-  };
-
-  const saveName = async () => {
-    const fullName = editedName.trim();
-    if (!fullName) return;
-
-    setIsSavingName(true);
-    setNameSaveError('');
-    try {
-      const updatedUser = await authService.updateCurrentUser({ fullName });
-      setUser((previous) => ({ ...previous, ...updatedUser }));
-      setSettingsError('');
-      setActiveModal(null);
-    } catch (error) {
-      console.error('Profil adı kaydedilemedi:', error);
-      setNameSaveError(error instanceof Error ? error.message : 'Profil adı kaydedilemedi.');
-    } finally {
-      setIsSavingName(false);
-    }
   };
 
   const updateRadius = async (searchRadiusKm: number) => {
@@ -170,16 +177,25 @@ const ProfileScreen = ({ navigation }: any) => {
           </View>
           <View style={styles.userInfo}>
             <Text style={styles.userName}>{user.fullName}</Text>
+            <Text style={styles.userContact}>{user.email}</Text>
+            {user.profilePhone ? <Text style={styles.userContact}>{user.profilePhone}</Text> : null}
             <TouchableOpacity
               style={styles.editBtn}
               onPress={() => {
-                setEditedName(user.fullName);
-                setNameSaveError('');
-                setActiveModal('edit');
+                if (!user.id) {
+                  setSettingsError('Profil düzenleme için kullanıcı bilgisi yüklenemedi.');
+                  return;
+                }
+                navigation.navigate('EditProfile', {
+                  userId: user.id,
+                  fullName: user.fullName,
+                  email: user.email,
+                });
               }}
+              accessibilityRole="button"
             >
-              <Text style={styles.editBtnText}>Profil bilgilerini düzenle</Text>
-              <Ionicons name="pencil" size={12} color={theme.COLORS.primary} />
+              <Text style={styles.editBtnText}>Profilini düzenle</Text>
+              <Ionicons name="create-outline" size={15} color={theme.COLORS.primary} />
             </TouchableOpacity>
           </View>
         </View>
@@ -318,24 +334,6 @@ const ProfileScreen = ({ navigation }: any) => {
       <Modal visible={activeModal !== null} transparent animationType="fade" onRequestClose={() => setActiveModal(null)}>
         <Pressable style={styles.modalBackdrop} onPress={() => setActiveModal(null)}>
           <Pressable style={styles.modalCard} onPress={(event) => event.stopPropagation()}>
-            {activeModal === 'edit' && (
-              <>
-                <Text style={styles.modalTitle}>Profil bilgilerini düzenle</Text>
-                <Text style={styles.modalDescription}>Profil adını sunucuya kaydetme özelliği backend desteği bekliyor. Şu an yaptığın değişiklikler kaydedilmiyor.</Text>
-                <TextInput
-                  style={styles.profileInput}
-                  value={editedName}
-                  onChangeText={setEditedName}
-                  placeholder="Ad Soyad"
-                  accessibilityLabel="Ad soyad"
-                />
-                {nameSaveError ? <Text style={styles.settingsError}>{nameSaveError}</Text> : null}
-                <TouchableOpacity style={styles.modalPrimaryButton} onPress={saveName} disabled={isSavingName || !editedName.trim()}>
-                  <Text style={styles.modalPrimaryText}>{isSavingName ? 'Kaydediliyor...' : 'Kaydet'}</Text>
-                </TouchableOpacity>
-              </>
-            )}
-
             {activeModal === 'location' && (
               <>
                 <Text style={styles.modalTitle}>Konum ve arama alanı</Text>
@@ -394,7 +392,7 @@ const ProfileScreen = ({ navigation }: any) => {
               <>
                 <Text style={styles.modalTitle}>Hesap ve gizlilik</Text>
                 <Text style={styles.modalDescription}>
-                  Profil adı mevcut giriş bilgilerinden gösterilir ve sunucuda değiştirilemez. Uygulama tercihleri bu cihazda saklanır. Hesap silme, şifre sıfırlama ve sunucudaki kişisel verileri yönetme özellikleri backend desteği gerektirir.
+                  Profil adı ve telefon bu cihazda saklanır; hesap sunucusuyla eşitlenmez. E-posta mevcut hesap bilgilerinden gösterilir. Hesap silme ve sunucudaki kişisel verileri yönetme özellikleri backend desteği gerektirir.
                 </Text>
                 <TouchableOpacity style={styles.modalPrimaryButton} onPress={() => setActiveModal(null)}>
                   <Text style={styles.modalPrimaryText}>Anladım</Text>
@@ -429,7 +427,8 @@ const styles = StyleSheet.create({
   avatarText: { ...theme.FONTS.h2, color: theme.COLORS.card },
   userInfo: { marginLeft: theme.SIZES.m },
   userName: { ...theme.FONTS.h3, color: theme.COLORS.text, marginBottom: 4 },
-  editBtn: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  userContact: { ...theme.FONTS.caption, color: theme.COLORS.textSecondary, marginBottom: 2 },
+  editBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: 40, marginLeft: -4 },
   editBtnText: { ...theme.FONTS.caption, color: theme.COLORS.primary, fontWeight: '600' },
   statsRow: { flexDirection: 'row', backgroundColor: theme.COLORS.card, borderRadius: theme.SIZES.radius, padding: theme.SIZES.m, marginBottom: theme.SIZES.xl, borderWidth: 1, borderColor: theme.COLORS.border },
   statBox: { flex: 1, alignItems: 'center' },
@@ -456,7 +455,6 @@ const styles = StyleSheet.create({
   modalCard: { alignSelf: 'center', width: '100%', maxWidth: 440, padding: theme.SIZES.l, backgroundColor: theme.COLORS.card, borderRadius: theme.SIZES.cardRadius },
   modalTitle: { ...theme.FONTS.h3, color: theme.COLORS.text, marginBottom: theme.SIZES.m },
   modalDescription: { ...theme.FONTS.body2, color: theme.COLORS.textSecondary, lineHeight: 21, marginBottom: theme.SIZES.m },
-  profileInput: { height: 48, borderWidth: 1, borderColor: theme.COLORS.border, borderRadius: theme.SIZES.radius, paddingHorizontal: theme.SIZES.m, color: theme.COLORS.text, marginBottom: theme.SIZES.m },
   modalPrimaryButton: { alignItems: 'center', justifyContent: 'center', minHeight: 48, paddingHorizontal: theme.SIZES.m, backgroundColor: theme.COLORS.primary, borderRadius: theme.SIZES.buttonRadius, marginTop: theme.SIZES.s },
   modalPrimaryText: { ...theme.FONTS.body2, fontWeight: '600', color: theme.COLORS.card },
   radiusOptions: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.SIZES.s, marginBottom: theme.SIZES.m },
