@@ -1,7 +1,8 @@
 package handlers
 
 import (
-	"errors"
+	"crypto/sha256"
+	"encoding/hex"
 	"net/http"
 	"strings"
 
@@ -9,6 +10,14 @@ import (
 )
 
 func (h *BagHandler) register(w http.ResponseWriter, r *http.Request) {
+	ip := clientIP(r)
+	if !h.authIPLim.allow(ip) || !h.registerIPLim.allow(ip) {
+		w.Header().Set("Retry-After", "3600")
+		writeJSON(w, http.StatusTooManyRequests, map[string]string{
+			"error": "çok fazla kayıt isteği, lütfen daha sonra tekrar deneyin",
+		})
+		return
+	}
 	var req struct {
 		FullName string                `json:"full_name"`
 		Email    string                `json:"email"`
@@ -42,24 +51,22 @@ func (h *BagHandler) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	key := clientIP(r) + "|" + strings.ToLower(strings.TrimSpace(req.Email))
-	if !h.loginLim.allow(key) {
+	ip := clientIP(r)
+	emailHash := sha256.Sum256([]byte(strings.ToLower(strings.TrimSpace(req.Email))))
+	key := ip + "|" + hex.EncodeToString(emailHash[:])
+	if !h.authIPLim.allow(ip) || !h.loginLim.allow(key) {
 		w.Header().Set("Retry-After", "900")
 		writeJSON(w, http.StatusTooManyRequests, map[string]string{
-			"error": "çok fazla başarısız deneme, lütfen 15 dakika sonra tekrar deneyin",
+			"error": "çok fazla giriş isteği, lütfen 15 dakika sonra tekrar deneyin",
 		})
 		return
 	}
 
 	res, err := h.authSvc.Login(r.Context(), req.Email, req.Password)
 	if err != nil {
-		if errors.Is(err, domain.ErrInvalidCredentials) {
-			h.loginLim.fail(key)
-		}
 		writeError(w, err)
 		return
 	}
-	h.loginLim.reset(key)
 	writeJSON(w, http.StatusOK, res)
 }
 

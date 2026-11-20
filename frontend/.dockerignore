@@ -3,4 +3,7 @@ node_modules
 dist
 web-build
 .git
+.env
+.env.*
+!.env.example
 npm-debug.log*

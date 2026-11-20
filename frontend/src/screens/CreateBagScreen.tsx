@@ -16,7 +16,7 @@ const QUANTITY_PRESETS = [1, 5, 10, 20];
 const CreateBagScreen = ({ route, navigation }: any) => {
   const routeBusinessId = route?.params?.businessId;
   const [loadedBusinessId, setLoadedBusinessId] = useState<string | undefined>();
-  const [businessIdError, setBusinessIdError] = useState('');
+  const [businessLoadError, setBusinessLoadError] = useState('');
   const [businessLoadAttempt, setBusinessLoadAttempt] = useState(0);
   const [activeCategory, setActiveCategory] = useState('Fırın');
   const [originalPrice, setOriginalPrice] = useState('350');
@@ -36,17 +36,19 @@ const CreateBagScreen = ({ route, navigation }: any) => {
 
   useEffect(() => {
     let isCancelled = false;
-    if (routeBusinessId) return () => { isCancelled = true; };
-    businessService.getCurrentBusinessId()
-      .then((id) => {
+    if (routeBusinessId) {
+      return () => { isCancelled = true; };
+    }
+    businessService.getMyBusiness()
+      .then((business) => {
         if (!isCancelled) {
-          setLoadedBusinessId(id);
-          setBusinessIdError('');
+          setLoadedBusinessId(business.id);
+          setBusinessLoadError('');
         }
       })
       .catch((error) => {
         console.error('İşletme kimliği yüklenemedi:', error);
-        if (!isCancelled) setBusinessIdError('İşletme bilgisi yüklenemedi.');
+        if (!isCancelled) setBusinessLoadError('İşletme bilgisi yüklenemedi.');
       });
 
     return () => { isCancelled = true; };
@@ -73,7 +75,7 @@ const CreateBagScreen = ({ route, navigation }: any) => {
 
   const handlePublish = async () => {
     if (!businessId) {
-      Alert.alert('İşletme bilgisi eksik', 'Çantayı yayınlamadan önce işletme paneline dönüp tekrar deneyin.');
+      Alert.alert('İşletme bulunamadı', businessLoadError || 'İlan yayımlamak için işletme bilgisi gerekli.');
       return;
     }
 
@@ -165,6 +167,9 @@ const CreateBagScreen = ({ route, navigation }: any) => {
               <Ionicons name="leaf" size={34} color="#A8C9AF" />
             </View>
           </View>
+          {businessLoadError ? (
+            <Text accessibilityRole="alert" style={styles.businessError}>{businessLoadError}</Text>
+          ) : null}
 
           <View style={styles.sectionHeading}>
             <View style={styles.stepBadge}><Text style={styles.stepNumber}>01</Text></View>
@@ -410,9 +415,9 @@ const CreateBagScreen = ({ route, navigation }: any) => {
           <View style={styles.bottomSummary}>
             <Text style={styles.bottomSummaryLabel}>YAYINLANACAK</Text>
             <Text style={styles.bottomSummaryValue}>{bagCount} çanta <Text style={styles.bottomSummaryPrice}>· {parsedPrice > 0 ? `${parsedPrice} ₺ / adet` : 'fiyat girin'}</Text></Text>
-            {businessIdError && !businessId ? (
+            {businessLoadError && !businessId ? (
               <TouchableOpacity onPress={() => setBusinessLoadAttempt((attempt) => attempt + 1)} accessibilityRole="button">
-                <Text style={styles.businessIdError}>{businessIdError} Tekrar dene</Text>
+                <Text style={styles.businessIdError}>{businessLoadError} Tekrar dene</Text>
               </TouchableOpacity>
             ) : null}
           </View>
@@ -426,7 +431,7 @@ const CreateBagScreen = ({ route, navigation }: any) => {
               <ActivityIndicator color={theme.COLORS.card} />
             ) : !businessId ? (
               <Text style={styles.publishBtnText}>
-                {businessIdError ? 'İşletme bilgisi gerekli' : 'İşletme yükleniyor'}
+                {businessLoadError ? 'İşletme bilgisi gerekli' : 'İşletme yükleniyor'}
               </Text>
             ) : (
               <>
@@ -458,6 +463,7 @@ const styles = StyleSheet.create({
   heroTitle: { ...theme.FONTS.body2, fontWeight: '700', lineHeight: 20, color: theme.COLORS.text, marginBottom: 3 },
   heroDescription: { ...theme.FONTS.caption, lineHeight: 17, color: theme.COLORS.textSecondary },
   heroDecoration: { opacity: 0.8 },
+  businessError: { ...theme.FONTS.body2, color: theme.COLORS.error, marginBottom: theme.SIZES.m },
   sectionHeading: { flexDirection: 'row', alignItems: 'center', marginBottom: theme.SIZES.m },
   stepBadge: { width: 34, height: 34, alignItems: 'center', justifyContent: 'center', borderRadius: 12, backgroundColor: theme.COLORS.tagBackground, marginRight: theme.SIZES.s },
   stepNumber: { fontSize: 11, fontWeight: '800', color: theme.COLORS.primary },

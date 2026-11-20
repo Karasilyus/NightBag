@@ -10,6 +10,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"math"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -30,20 +31,17 @@ const (
 var dummyHash, _ = hashPassword("dummy-password-for-timing")
 
 var (
-	uuidPattern  = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
 	emailPattern = regexp.MustCompile(`^[^@\s]+@[^@\s]+\.[^@\s]+$`)
 	b64          = base64.RawURLEncoding
 )
 
 type AuthService struct {
-	repo              domain.AuthRepository
-	secret            []byte
-	allowUserIDHeader bool
+	repo   domain.AuthRepository
+	secret []byte
 }
 
-// allowUserIDHeader=true iken eski geçici X-User-ID başlığı da kabul edilir (sadece geliştirme için).
-func NewAuthService(repo domain.AuthRepository, secret string, allowUserIDHeader bool) *AuthService {
-	return &AuthService{repo: repo, secret: []byte(secret), allowUserIDHeader: allowUserIDHeader}
+func NewAuthService(repo domain.AuthRepository, secret string) *AuthService {
+	return &AuthService{repo: repo, secret: []byte(secret)}
 }
 
 // ---------- şifre ----------
@@ -94,8 +92,8 @@ func verifyPassword(pw, stored string) bool {
 }
 
 func passwordHashNeedsRehash(stored string) bool {
-	iter, _, _, ok := parsePasswordHash(stored)
-	return !ok || iter < pbkdf2Iter
+	iter, _, _, _ := parsePasswordHash(stored)
+	return iter < pbkdf2Iter
 }
 
 // ---------- imzalı token (HMAC-SHA256, harici kütüphane yok) ----------
@@ -106,53 +104,66 @@ func (s *AuthService) sign(payload string) string {
 	return b64.EncodeToString(m.Sum(nil))
 }
 
-func (s *AuthService) issueToken(userID string) string {
-	payload := userID + "|" + strconv.FormatInt(time.Now().Add(tokenTTL).Unix(), 10)
+func (s *AuthService) issueToken(userID string, tokenVersion int) string {
+	payload := userID + "|" + strconv.Itoa(tokenVersion) + "|" + strconv.FormatInt(time.Now().Add(tokenTTL).Unix(), 10)
 	return b64.EncodeToString([]byte(payload)) + "." + s.sign(payload)
 }
 
-func (s *AuthService) parseToken(tok string) (string, bool) {
+func (s *AuthService) parseToken(tok string) (string, int, bool) {
 	parts := strings.Split(tok, ".")
 	if len(parts) != 2 {
-		return "", false
+		return "", 0, false
 	}
 	raw, err := b64.DecodeString(parts[0])
 	if err != nil {
-		return "", false
+		return "", 0, false
 	}
 	payload := string(raw)
 	if !hmac.Equal([]byte(parts[1]), []byte(s.sign(payload))) {
-		return "", false
+		return "", 0, false
 	}
-	idx := strings.LastIndex(payload, "|")
-	if idx < 0 {
-		return "", false
+	claims := strings.Split(payload, "|")
+	if len(claims) != 2 && len(claims) != 3 {
+		return "", 0, false
 	}
-	exp, err := strconv.ParseInt(payload[idx+1:], 10, 64)
-	if err != nil || time.Now().Unix() > exp {
-		return "", false
+	userID, tokenVersion, expiry := claims[0], 0, claims[1]
+	if len(claims) == 3 {
+		version, err := strconv.Atoi(claims[1])
+		if err != nil || version < 0 {
+			return "", 0, false
+		}
+		tokenVersion, expiry = version, claims[2]
 	}
-	uid := payload[:idx]
-	if !uuidPattern.MatchString(uid) {
-		return "", false
+	exp, err := strconv.ParseInt(expiry, 10, 64)
+	if err != nil || time.Now().Unix() > exp || !domain.IsUUID(userID) {
+		return "", 0, false
 	}
-	return uid, true
+	return userID, tokenVersion, true
 }
 
 // UserID: isteği yapan kullanıcıyı döndürür (Bearer token; izin verilmişse X-User-ID).
-func (s *AuthService) UserID(r *http.Request) (string, bool) {
+func (s *AuthService) UserID(ctx context.Context, r *http.Request) (string, bool, error) {
 	if h := r.Header.Get("Authorization"); h != "" {
 		if !strings.HasPrefix(h, "Bearer ") {
-			return "", false
+			return "", false, nil
 		}
-		return s.parseToken(strings.TrimPrefix(h, "Bearer "))
-	}
-	if s.allowUserIDHeader {
-		if uid := r.Header.Get("X-User-ID"); uuidPattern.MatchString(uid) {
-			return uid, true
+		userID, tokenVersion, ok := s.parseToken(strings.TrimPrefix(h, "Bearer "))
+		if !ok {
+			return "", false, nil
 		}
+		user, err := s.repo.GetAuthUser(ctx, userID)
+		if errors.Is(err, domain.ErrUserNotFound) {
+			return "", false, nil
+		}
+		if err != nil {
+			return "", false, err
+		}
+		if user.TokenVersion != tokenVersion {
+			return "", false, nil
+		}
+		return userID, true, nil
 	}
-	return "", false
+	return "", false, nil
 }
 
 // ---------- kayıt / giriş ----------
@@ -183,13 +194,16 @@ func (s *AuthService) Register(ctx context.Context, in domain.RegisterInput) (*d
 		}
 		b.Name, b.Address, b.District = strings.TrimSpace(b.Name), strings.TrimSpace(b.Address), strings.TrimSpace(b.District)
 		switch {
-		case b.Name == "":
-			return nil, invalid("işletme adı zorunlu")
+		case b.Name == "" || len(b.Name) > 120:
+			return nil, invalid("işletme adı zorunlu ve en fazla 120 karakter olmalı")
 		case !b.Category.Valid():
 			return nil, invalid("kategori firin, kafe, tatli veya yemek olmalı")
-		case b.Address == "":
-			return nil, invalid("işletme adresi zorunlu")
-		case b.Lat < -90 || b.Lat > 90 || b.Lon < -180 || b.Lon > 180 || (b.Lat == 0 && b.Lon == 0):
+		case b.Address == "" || len(b.Address) > 300:
+			return nil, invalid("işletme adresi zorunlu ve en fazla 300 karakter olmalı")
+		case len(b.District) > 100:
+			return nil, invalid("ilçe en fazla 100 karakter olabilir")
+		case math.IsNaN(b.Lat) || math.IsInf(b.Lat, 0) || math.IsNaN(b.Lon) || math.IsInf(b.Lon, 0) ||
+			b.Lat < -90 || b.Lat > 90 || b.Lon < -180 || b.Lon > 180 || (b.Lat == 0 && b.Lon == 0):
 			return nil, invalid("geçerli işletme konumu (lat, lon) zorunlu")
 		}
 	} else {
@@ -204,7 +218,7 @@ func (s *AuthService) Register(ctx context.Context, in domain.RegisterInput) (*d
 	if err != nil {
 		return nil, err
 	}
-	return &domain.AuthResult{Token: s.issueToken(u.ID), User: *u}, nil
+	return &domain.AuthResult{Token: s.issueToken(u.ID, u.TokenVersion), User: *u}, nil
 }
 
 func (s *AuthService) Login(ctx context.Context, email, password string) (*domain.AuthResult, error) {
@@ -233,7 +247,7 @@ func (s *AuthService) Login(ctx context.Context, email, password string) (*domai
 			return nil, err
 		}
 	}
-	return &domain.AuthResult{Token: s.issueToken(u.ID), User: *u}, nil
+	return &domain.AuthResult{Token: s.issueToken(u.ID, u.TokenVersion), User: *u}, nil
 }
 
 func (s *AuthService) GetAuthUser(ctx context.Context, id string) (*domain.AuthUser, error) {
@@ -242,6 +256,10 @@ func (s *AuthService) GetAuthUser(ctx context.Context, id string) (*domain.AuthU
 
 func (s *AuthService) MyBusiness(ctx context.Context, ownerID string) (*domain.Business, error) {
 	return s.repo.GetBusinessByOwner(ctx, ownerID)
+}
+
+func (s *AuthService) RevokeTokens(ctx context.Context, userID string) error {
+	return s.repo.RevokeTokens(ctx, userID)
 }
 
 // EnsureSeedPasswords: seed kullanıcılarına (şifresi boşsa) geliştirme şifresi atar.

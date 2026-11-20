@@ -10,6 +10,7 @@ const CheckoutScreen = ({ route, navigation }: any) => {
   const [paymentPreference, setPaymentPreference] = useState<'pickup' | 'online'>('pickup');
   const [isReserving, setIsReserving] = useState(false);
   const isOnlinePayment = paymentPreference === 'online';
+  const [termsAccepted, setTermsAccepted] = useState(false);
   const hasStockInfo = Number.isFinite(bag?.remainingBags);
   const maxQuantity = hasStockInfo
     ? Math.min(4, Math.max(0, Math.floor(bag.remainingBags)))
@@ -17,10 +18,10 @@ const CheckoutScreen = ({ route, navigation }: any) => {
   const pricePerBag = Number.isFinite(bag?.price) ? bag.price : 0;
 
   const handleConfirmReservation = async () => {
-    if (!bag?.id || maxQuantity === 0 || isOnlinePayment) return;
+    if (!bag?.id || maxQuantity === 0 || isOnlinePayment || !termsAccepted) return;
     setIsReserving(true);
     try {
-      const reservation = await reservationService.reserve(bag.id, quantity);
+      const reservation = await reservationService.reserve(bag.id, quantity, termsAccepted);
       navigation.navigate('ReservationConfirmed', { reservation });
     } catch (error: any) {
       const errMsg = error.response?.data?.error || error.message || 'Rezervasyon oluşturulamadı. Lütfen tekrar deneyin.';
@@ -174,12 +175,22 @@ const CheckoutScreen = ({ route, navigation }: any) => {
             </Text>
           </View>
           
-          <View style={styles.agreementBox}>
-            <Ionicons name="checkmark-circle" size={20} color={theme.COLORS.primary} />
+          <TouchableOpacity
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: termsAccepted }}
+            style={styles.agreementBox}
+            onPress={() => setTermsAccepted((accepted) => !accepted)}
+            disabled={isReserving}
+          >
+            <Ionicons
+              name={termsAccepted ? 'checkmark-circle' : 'ellipse-outline'}
+              size={22}
+              color={termsAccepted ? theme.COLORS.primary : theme.COLORS.textSecondary}
+            />
             <Text style={styles.agreementText}>
-              Teslim saatinde işletmede olacağımı ve çanta içeriğini kabul ettiğimi onaylıyorum.
+              Teslim saatinde işletmede olacağımı ve çanta içeriğinin sürpriz olabileceğini kabul ediyorum.
             </Text>
-          </View>
+          </TouchableOpacity>
         </View>
 
       </ScrollView>
@@ -187,9 +198,9 @@ const CheckoutScreen = ({ route, navigation }: any) => {
       {/* Alt Sabit Bar */}
       <View style={styles.bottomBar}>
         <TouchableOpacity 
-          style={[styles.confirmBtn, (isReserving || maxQuantity === 0 || isOnlinePayment) && { opacity: 0.7 }]}
+          style={[styles.confirmBtn, (isReserving || maxQuantity === 0 || isOnlinePayment || !termsAccepted) && { opacity: 0.7 }]}
           onPress={handleConfirmReservation}
-          disabled={isReserving || maxQuantity === 0 || isOnlinePayment}
+          disabled={isReserving || maxQuantity === 0 || isOnlinePayment || !termsAccepted}
         >
           {isReserving ? (
             <ActivityIndicator color={theme.COLORS.card} />

@@ -36,14 +36,18 @@ const mapBusinessOrder = (reservation: BusinessReservation) => ({
   totalPrice: reservation.total_price,
 });
 
+const fetchMyBusiness = async (): Promise<BusinessResponse> => {
+  const response = await apiClient.get<BusinessResponse>('/business/me');
+  if (!response.data?.id || !response.data.name) {
+    throw new Error('İşletme bilgisi yanıtı geçersiz.');
+  }
+  return response.data;
+};
+
 export const businessService = {
-  getCurrentBusinessId: async (): Promise<string> => {
-    const response = await apiClient.get<BusinessResponse>('/business/me');
-    if (!response.data?.id) {
-      throw new Error('İşletme bilgisi yanıtı geçersiz.');
-    }
-    return response.data.id;
-  },
+  getMyBusiness: fetchMyBusiness,
+
+  getCurrentBusinessId: async (): Promise<string> => (await fetchMyBusiness()).id,
 
   /**
    * İşletme genel bakış istatistiklerini getirir.
@@ -52,7 +56,7 @@ export const businessService = {
   getDashboardData: async (): Promise<{ data: any }> => {
     const [overviewResponse, businessResponse, ordersResponse] = await Promise.all([
       apiClient.get<BusinessOverviewResponse>('/business/overview'),
-      apiClient.get<BusinessResponse>('/business/me'),
+      businessService.getMyBusiness(),
       apiClient.get<BusinessReservation[]>('/business/reservations'),
     ]);
     const overview = overviewResponse.data;
@@ -64,9 +68,6 @@ export const businessService = {
     ) {
       throw new Error('İşletme özeti yanıtı geçersiz.');
     }
-    if (!businessResponse.data?.id || !businessResponse.data.name) {
-      throw new Error('İşletme bilgisi yanıtı geçersiz.');
-    }
     if (!Array.isArray(ordersResponse.data)) {
       throw new Error('İşletme rezervasyonları yanıtı geçersiz.');
     }
@@ -76,8 +77,8 @@ export const businessService = {
 
     return {
       data: {
-        businessName: businessResponse.data.name,
-        businessId: businessResponse.data?.id,
+        businessName: businessResponse.name,
+        businessId: businessResponse.id,
         dateString: new Date().toLocaleDateString('tr-TR', {
           weekday: 'long',
           day: 'numeric',

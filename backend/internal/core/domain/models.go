@@ -1,6 +1,15 @@
 package domain
 
-import "time"
+import (
+	"regexp"
+	"time"
+)
+
+var uuidPattern = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
+
+func IsUUID(value string) bool {
+	return uuidPattern.MatchString(value)
+}
 
 type BagCategory string
 
@@ -69,6 +78,13 @@ type CreateListingInput struct {
 	PickupEnd     string
 	PhotoURL      *string
 }
+
+type ReservationInput struct {
+	Quantity      int
+	AcceptedTerms bool
+}
+
+const MaxActiveReservationBags = 4
 
 type ReservationScope string
 
