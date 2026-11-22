@@ -10,6 +10,7 @@ import { preferencesService, UserPreferences } from '../services/preferences.ser
 
 const MapScreen = ({ navigation }: any) => {
   const { width } = useWindowDimensions();
+  const isCompactMap = width < 700;
   const [bags, setBags] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
@@ -110,24 +111,30 @@ const MapScreen = ({ navigation }: any) => {
         </View>
       </SafeAreaView>
 
-      {/* Harita üzerindeki dikey sonuç listesi */}
-      <View style={[styles.mapSidebar, { width: Math.min(width - 24, 360, Math.max(220, width * 0.32)) }]}>
-        <Text style={styles.listTitle}>Yakındaki çantalar</Text>
+      <View style={isCompactMap
+        ? styles.compactList
+        : [styles.mapSidebar, { width: Math.min(width - 24, 360, Math.max(220, width * 0.32)) }]}>
+        <Text style={[styles.listTitle, isCompactMap && styles.compactListTitle]}>Yakındaki çantalar</Text>
         {isLoading ? (
-          <ActivityIndicator size="large" color={theme.COLORS.primary} style={styles.loadingIndicator} />
+          <ActivityIndicator size="large" color={theme.COLORS.primary} style={isCompactMap ? styles.compactMessage : styles.loadingIndicator} />
         ) : loadError ? (
-          <View style={styles.listMessage}>
+          <View style={[styles.listMessage, isCompactMap && styles.compactMessage]}>
             <Text style={styles.listMessageText}>{loadError}</Text>
             <TouchableOpacity onPress={() => setRetryCount((count) => count + 1)} accessibilityRole="button">
               <Text style={styles.retryText}>Tekrar dene</Text>
             </TouchableOpacity>
           </View>
         ) : bags.length === 0 ? (
-          <Text style={styles.listMessageText}>Bu bölgede uygun çanta bulunamadı.</Text>
+          <Text style={[styles.listMessageText, isCompactMap && styles.compactMessage]}>Bu bölgede uygun çanta bulunamadı.</Text>
         ) : (
-          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+          <ScrollView
+            horizontal={isCompactMap}
+            showsHorizontalScrollIndicator={false}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={isCompactMap ? styles.compactScrollContent : styles.scrollContent}
+          >
             {bags.map((item) => (
-              <SurpriseBagCard key={item.id} {...item} isMapSidebarCard />
+              <SurpriseBagCard key={item.id} {...item} isMapCard={isCompactMap} isMapSidebarCard={!isCompactMap} />
             ))}
           </ScrollView>
         )}
@@ -219,6 +226,28 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 4,
   },
+  compactList: {
+    position: 'absolute',
+    bottom: theme.SIZES.m,
+    left: 0,
+    right: 0,
+  },
+  compactListTitle: {
+    alignSelf: 'flex-start',
+    marginLeft: theme.SIZES.m,
+    marginBottom: theme.SIZES.s,
+    paddingHorizontal: theme.SIZES.m,
+    backgroundColor: theme.COLORS.card,
+    borderRadius: theme.SIZES.radius,
+    overflow: 'hidden',
+  },
+  compactMessage: {
+    alignSelf: 'flex-start',
+    marginHorizontal: theme.SIZES.m,
+    padding: theme.SIZES.m,
+    borderRadius: theme.SIZES.radius,
+    backgroundColor: theme.COLORS.card,
+  },
   listTitle: {
     ...theme.FONTS.body2,
     color: theme.COLORS.text,
@@ -227,6 +256,9 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingBottom: theme.SIZES.s,
+  },
+  compactScrollContent: {
+    paddingHorizontal: theme.SIZES.m,
   },
   loadingIndicator: {
     marginTop: theme.SIZES.xl,

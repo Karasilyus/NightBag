@@ -5,6 +5,7 @@ import theme from '../constants/theme';
 import { authService } from '../services/auth.service';
 import { preferencesService } from '../services/preferences.service';
 import { checkPasswordBreach, getPasswordStrengthScore } from '../services/password-security.service';
+import LegalDraftNotice from '../components/LegalDraftNotice';
 
 const BUSINESS_CATEGORIES = [
   { value: 'bakery', label: 'Fırın', apiCategory: 'firin', icon: 'restaurant-outline' as const },
@@ -38,6 +39,7 @@ const AuthScreen = ({ navigation }: any) => {
   const [businessLongitude, setBusinessLongitude] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const [draftAcknowledged, setDraftAcknowledged] = useState(false);
   const passwordStrengthScore = password ? getPasswordStrengthScore(password) : 0;
   const passwordStrengthLabel = ['Çok zayıf', 'Zayıf', 'Orta', 'Güçlü', 'Çok güçlü'][passwordStrengthScore];
 
@@ -69,6 +71,10 @@ const AuthScreen = ({ navigation }: any) => {
     }
 
     if (!isLogin) {
+      if (!draftAcknowledged) {
+        setErrorMsg('Bilgilendirme taslağını inceleyip taslak olduğunu onaylayın.');
+        return;
+      }
       if (password.length < 8) {
         setErrorMsg('Şifre en az 8 karakter olmalı.');
         return;
@@ -372,6 +378,13 @@ const AuthScreen = ({ navigation }: any) => {
               )}
             </View>
 
+            {!isLogin && (
+              <LegalDraftNotice
+                context="registration"
+                acknowledged={draftAcknowledged}
+                onAcknowledgedChange={setDraftAcknowledged}
+              />
+            )}
             {isLogin && (
               <TouchableOpacity
                 style={styles.forgotPasswordBtn}
@@ -413,7 +426,7 @@ const AuthScreen = ({ navigation }: any) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: theme.COLORS.card,
+    backgroundColor: theme.COLORS.background,
   },
   header: {
     paddingHorizontal: theme.SIZES.l,

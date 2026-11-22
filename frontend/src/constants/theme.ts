@@ -1,13 +1,13 @@
 export const COLORS = {
   primary: '#163E2B', // Koyu yeşil marka rengi
-  background: '#FDFBF7', // Krem/bej arka plan
+  background: '#EDEBDD', // Doğal bej arka plan
   card: '#FFFFFF', // Kart arka planları
-  text: '#1C1C1E', // Koyu ana metin
-  textSecondary: '#6C6C70', // Gri alt metinler
-  border: '#E5E5EA', // İnce gri çizgiler
+  text: '#21352A', // Koyu ana metin
+  textSecondary: '#58665C', // İkincil metinler
+  border: '#CFD6C6', // İnce çizgiler
   success: '#34C759', // Başarı/onay yeşili
   error: '#FF3B30', // Hata kırmızısı
-  tagBackground: '#E8F3EB', // Açık yeşil etiket arka planı
+  tagBackground: '#DCE8D7', // Adaçayı yeşili
   tagText: '#163E2B', // Açık yeşil etiket metni
 };
 

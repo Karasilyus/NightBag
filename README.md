@@ -107,7 +107,14 @@ reservations, and business listings are stored through the backend API.
 Business profile photos selected from the device are local-only; use an HTTPS
 photo URL in a listing until image upload/storage is configured. Checkout
 currently creates a reservation for payment at pickup; online payment is not
-connected to a payment provider.
+connected to a payment provider. The online payment screen is a preview only:
+it collects no card data and cannot create a reservation.
+
+The registration and order information screens are explicitly labelled drafts,
+not KVKK consent records or legally approved notices. The draft acknowledgement
+is not stored and is requested again for each order. Before launch, obtain
+business-specific, legally reviewed notices and implement appropriate server-side
+recording and separate optional consents where required.
 
 The discovery distance control covers 2–50 km. The current nearby-listings API
 caps radius at 50 km and returns at most 50 listings, so “Tümü” currently means

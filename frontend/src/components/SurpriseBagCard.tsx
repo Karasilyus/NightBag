@@ -183,7 +183,7 @@ const styles = StyleSheet.create({
     marginBottom: theme.SIZES.m,
   },
   mapCardImageContainer: {
-    height: 104,
+    height: 72,
   },
   mapSidebarImageContainer: {
     height: 128,
@@ -273,9 +273,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: theme.COLORS.primary,
-    paddingVertical: theme.SIZES.s,
+    paddingVertical: theme.SIZES.xs,
     borderRadius: theme.SIZES.buttonRadius,
-    marginTop: theme.SIZES.m,
+    marginTop: theme.SIZES.s,
     gap: theme.SIZES.xs,
   },
   reserveBtnText: {

@@ -20,6 +20,7 @@ import { profileService } from '../services/profile.service';
 import type { BusinessProfileDetails } from '../services/profile.service';
 import { businessService } from '../services/business.service';
 import { preferencesService } from '../services/preferences.service';
+import { isValidOptionalPhone, normalizePhoneInput, PHONE_MAX_LENGTH } from '../utils/phone';
 
 const CATEGORIES = ['Fırın', 'Kafe', 'Tatlı', 'Yemek'];
 
@@ -114,6 +115,10 @@ const BusinessProfileScreen = ({ navigation, route }: any) => {
     }
     if (!details.name.trim() || !details.address.trim() || !details.district.trim()) {
       setSaveError('İşletme adı, açık adres ve ilçe zorunludur.');
+      return;
+    }
+    if (!isValidOptionalPhone(details.phone.trim())) {
+      setSaveError('Telefon numarası 11 rakam olmalı.');
       return;
     }
 
@@ -246,9 +251,10 @@ const BusinessProfileScreen = ({ navigation, route }: any) => {
             <TextInput
               style={styles.input}
               value={details.phone}
-              onChangeText={(value) => updateField('phone', value)}
-              placeholder="05xx xxx xx xx"
+              onChangeText={(value) => updateField('phone', normalizePhoneInput(value))}
+              placeholder="05xx veya 0850 ile başlayan numara"
               keyboardType="phone-pad"
+              maxLength={PHONE_MAX_LENGTH}
               accessibilityLabel="İşletme telefonu"
             />
 

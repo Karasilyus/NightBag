@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, SafeAreaVi
 import { Ionicons } from '@expo/vector-icons';
 import theme from '../constants/theme';
 import { reservationService } from '../services/reservation.service';
+import LegalDraftNotice from '../components/LegalDraftNotice';
 
 const CheckoutScreen = ({ route, navigation }: any) => {
   const bag = route?.params?.bag;
@@ -11,6 +12,7 @@ const CheckoutScreen = ({ route, navigation }: any) => {
   const [isReserving, setIsReserving] = useState(false);
   const isOnlinePayment = paymentPreference === 'online';
   const [termsAccepted, setTermsAccepted] = useState(false);
+  const [draftAcknowledged, setDraftAcknowledged] = useState(false);
   const hasStockInfo = Number.isFinite(bag?.remainingBags);
   const maxQuantity = hasStockInfo
     ? Math.min(4, Math.max(0, Math.floor(bag.remainingBags)))
@@ -18,7 +20,7 @@ const CheckoutScreen = ({ route, navigation }: any) => {
   const pricePerBag = Number.isFinite(bag?.price) ? bag.price : 0;
 
   const handleConfirmReservation = async () => {
-    if (!bag?.id || maxQuantity === 0 || isOnlinePayment || !termsAccepted) return;
+    if (!bag?.id || maxQuantity === 0 || isOnlinePayment || !termsAccepted || !draftAcknowledged) return;
     setIsReserving(true);
     try {
       const reservation = await reservationService.reserve(bag.id, quantity, termsAccepted);
@@ -173,8 +175,31 @@ const CheckoutScreen = ({ route, navigation }: any) => {
                 ? 'Online ödeme henüz etkin değil. Bu seçiliyken rezervasyon oluşturulmaz; kart bilgisi istenmez ve ödeme tahsil edilmez.'
                 : 'Ödeme arayüzü şimdilik taslaktır. Rezervasyon servisi ödeme tercihi almıyor; kart bilgisi istenmez ve ödeme tahsil edilmez.'}
             </Text>
+            {isOnlinePayment && (
+              <View style={styles.paymentPreview}>
+                <View style={styles.previewHeading}>
+                  <Ionicons name="lock-closed-outline" size={18} color={theme.COLORS.card} />
+                  <Text style={styles.previewLabel}>ÖDEME EKRANI · ÖNİZLEME</Text>
+                </View>
+                <Text style={styles.previewTitle}>Güvenli ödeme</Text>
+                <Text style={styles.previewDescription}>
+                  Kart bilgileri, sağlayıcı bağlantısı kurulduğunda güvenli ödeme ekranında girilecek.
+                </Text>
+                <View style={styles.previewFields}>
+                  <Text style={styles.previewField}>Kart numarası</Text>
+                  <Text style={styles.previewField}>Son kullanma tarihi</Text>
+                  <Text style={styles.previewField}>Güvenlik kodu</Text>
+                </View>
+                <Text style={styles.previewDescription}>Bu alanlar devre dışıdır; ödeme veya rezervasyon oluşturulmaz.</Text>
+              </View>
+            )}
           </View>
           
+          <LegalDraftNotice
+            context="order"
+            acknowledged={draftAcknowledged}
+            onAcknowledgedChange={setDraftAcknowledged}
+          />
           <TouchableOpacity
             accessibilityRole="checkbox"
             accessibilityState={{ checked: termsAccepted }}
@@ -198,9 +223,9 @@ const CheckoutScreen = ({ route, navigation }: any) => {
       {/* Alt Sabit Bar */}
       <View style={styles.bottomBar}>
         <TouchableOpacity 
-          style={[styles.confirmBtn, (isReserving || maxQuantity === 0 || isOnlinePayment || !termsAccepted) && { opacity: 0.7 }]}
+          style={[styles.confirmBtn, (isReserving || maxQuantity === 0 || isOnlinePayment || !termsAccepted || !draftAcknowledged) && { opacity: 0.7 }]}
           onPress={handleConfirmReservation}
-          disabled={isReserving || maxQuantity === 0 || isOnlinePayment || !termsAccepted}
+          disabled={isReserving || maxQuantity === 0 || isOnlinePayment || !termsAccepted || !draftAcknowledged}
         >
           {isReserving ? (
             <ActivityIndicator color={theme.COLORS.card} />
@@ -228,7 +253,7 @@ const CheckoutScreen = ({ route, navigation }: any) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: theme.COLORS.card,
+    backgroundColor: theme.COLORS.background,
   },
   header: {
     flexDirection: 'row',
@@ -253,11 +278,11 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: theme.SIZES.l,
-    paddingBottom: 120,
+    paddingBottom: 200,
   },
   bagCard: {
     flexDirection: 'row',
-    backgroundColor: theme.COLORS.background,
+    backgroundColor: theme.COLORS.card,
     borderRadius: theme.SIZES.radius,
     padding: theme.SIZES.s,
     marginBottom: theme.SIZES.xl,
@@ -450,6 +475,18 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     marginTop: theme.SIZES.s,
   },
+  paymentPreview: {
+    backgroundColor: theme.COLORS.primary,
+    borderRadius: theme.SIZES.cardRadius,
+    padding: theme.SIZES.m,
+    marginTop: theme.SIZES.m,
+  },
+  previewHeading: { flexDirection: 'row', alignItems: 'center', gap: theme.SIZES.s },
+  previewLabel: { ...theme.FONTS.caption, color: theme.COLORS.card, fontWeight: '700', letterSpacing: 0.6 },
+  previewTitle: { ...theme.FONTS.h3, color: theme.COLORS.card, marginTop: theme.SIZES.m },
+  previewDescription: { ...theme.FONTS.caption, color: theme.COLORS.card, lineHeight: 18, marginTop: theme.SIZES.s },
+  previewFields: { gap: theme.SIZES.s, marginTop: theme.SIZES.m },
+  previewField: { ...theme.FONTS.body2, color: theme.COLORS.textSecondary, backgroundColor: theme.COLORS.card, padding: theme.SIZES.m, borderRadius: theme.SIZES.radius, overflow: 'hidden' },
   agreementBox: {
     flexDirection: 'row',
     alignItems: 'flex-start',

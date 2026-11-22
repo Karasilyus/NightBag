@@ -6,6 +6,7 @@ import { authService } from '../services/auth.service';
 import { favoritesService } from '../services/favorites.service';
 import { preferencesService, UserPreferences } from '../services/preferences.service';
 import { profileService } from '../services/profile.service';
+import LegalDraftNotice from '../components/LegalDraftNotice';
 
 const PERSONALIZATION_CATEGORIES = ['Fırın', 'Kafe', 'Tatlı', 'Yemek'];
 
@@ -339,6 +340,7 @@ const ProfileScreen = ({ navigation }: any) => {
       <Modal visible={activeModal !== null} transparent animationType="fade" onRequestClose={() => setActiveModal(null)}>
         <Pressable style={styles.modalBackdrop} onPress={() => setActiveModal(null)}>
           <Pressable style={styles.modalCard} onPress={(event) => event.stopPropagation()}>
+            <ScrollView contentContainerStyle={styles.modalCardContent}>
             {activeModal === 'location' && (
               <>
                 <Text style={styles.modalTitle}>Konum ve arama alanı</Text>
@@ -397,10 +399,27 @@ const ProfileScreen = ({ navigation }: any) => {
               <>
                 <Text style={styles.modalTitle}>Hesap ve gizlilik</Text>
                 <Text style={styles.modalDescription}>
-                  Profil adı, telefon ve keşfet tercihlerin hesabınla eşitlenir. E-posta mevcut hesap bilgilerinden gösterilir. Hesap silme ve kişisel verilerin tamamen silinmesi şu anda desteklenmiyor.
+                  Profil bilgilerin ve keşfet tercihlerin hesabınla eşitlenir. Bilgilerini düzenleyebilir veya şifreni değiştirebilirsin.
                 </Text>
+                <LegalDraftNotice context="privacy" inlineDetails />
+                <TouchableOpacity style={styles.privacyAction} onPress={() => {
+                  setActiveModal(null);
+                  if (user.id) navigation.navigate('EditProfile', { userId: user.id, fullName: user.fullName, email: user.email });
+                  else setSettingsError('Profil bilgileri yüklenemedi.');
+                }} accessibilityRole="button">
+                  <Ionicons name="person-outline" size={19} color={theme.COLORS.primary} />
+                  <Text style={styles.privacyActionText}>Profil bilgilerini düzenle</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.privacyAction} onPress={() => {
+                  setActiveModal(null);
+                  navigation.navigate('PasswordReset', { initialEmail: user.email });
+                }} accessibilityRole="button">
+                  <Ionicons name="key-outline" size={19} color={theme.COLORS.primary} />
+                  <Text style={styles.privacyActionText}>Şifreni değiştir</Text>
+                </TouchableOpacity>
+                <Text style={styles.modalDescription}>Hesap silme ve kişisel verilerin tamamen silinmesi henüz desteklenmiyor.</Text>
                 <TouchableOpacity style={styles.modalPrimaryButton} onPress={() => setActiveModal(null)}>
-                  <Text style={styles.modalPrimaryText}>Anladım</Text>
+                  <Text style={styles.modalPrimaryText}>Kapat</Text>
                 </TouchableOpacity>
               </>
             )}
@@ -415,6 +434,7 @@ const ProfileScreen = ({ navigation }: any) => {
                 </TouchableOpacity>
               </>
             )}
+            </ScrollView>
           </Pressable>
         </Pressable>
       </Modal>
@@ -457,9 +477,12 @@ const styles = StyleSheet.create({
   categoryOptionTextSelected: { color: theme.COLORS.primary, fontWeight: '600' },
   emptyFavorites: { ...theme.FONTS.caption, color: theme.COLORS.textSecondary, textAlign: 'center', marginBottom: theme.SIZES.l },
   modalBackdrop: { flex: 1, justifyContent: 'center', padding: theme.SIZES.l, backgroundColor: 'rgba(0,0,0,0.35)' },
-  modalCard: { alignSelf: 'center', width: '100%', maxWidth: 440, padding: theme.SIZES.l, backgroundColor: theme.COLORS.card, borderRadius: theme.SIZES.cardRadius },
+  modalCard: { alignSelf: 'center', width: '100%', maxWidth: 440, maxHeight: '85%', backgroundColor: theme.COLORS.card, borderRadius: theme.SIZES.cardRadius },
+  modalCardContent: { padding: theme.SIZES.l },
   modalTitle: { ...theme.FONTS.h3, color: theme.COLORS.text, marginBottom: theme.SIZES.m },
   modalDescription: { ...theme.FONTS.body2, color: theme.COLORS.textSecondary, lineHeight: 21, marginBottom: theme.SIZES.m },
+  privacyAction: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: theme.SIZES.s, marginBottom: theme.SIZES.s },
+  privacyActionText: { ...theme.FONTS.body2, fontWeight: '600', color: theme.COLORS.primary },
   modalPrimaryButton: { alignItems: 'center', justifyContent: 'center', minHeight: 48, paddingHorizontal: theme.SIZES.m, backgroundColor: theme.COLORS.primary, borderRadius: theme.SIZES.buttonRadius, marginTop: theme.SIZES.s },
   modalPrimaryText: { ...theme.FONTS.body2, fontWeight: '600', color: theme.COLORS.card },
   radiusOptions: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.SIZES.s, marginBottom: theme.SIZES.m },

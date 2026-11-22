@@ -117,7 +117,14 @@ const HomeScreen = ({ navigation }: any) => {
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-        <Text style={styles.mainTitle}>Bugünün sonu,{"\n"}lezzetin başlangıcı.</Text>
+        <View style={styles.hero}>
+          <View style={styles.heroEyebrow}>
+            <Ionicons name="leaf-outline" size={16} color={theme.COLORS.card} />
+            <Text style={styles.heroEyebrowText}>İYİ YEMEK, YENİ BİR ŞANS</Text>
+          </View>
+          <Text style={styles.mainTitle}>Bugünün sonu,{"\n"}lezzetin başlangıcı.</Text>
+          <Text style={styles.heroCaption}>Yakınındaki lezzetleri keşfet, israfı birlikte azaltalım.</Text>
+        </View>
         
         {/* Arama */}
         <View style={styles.searchContainer}>
@@ -233,11 +240,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.SIZES.l,
     paddingBottom: 100, // Bottom tab için boşluk
   },
-  mainTitle: {
-    ...theme.FONTS.h1,
-    color: theme.COLORS.text,
+  hero: {
+    backgroundColor: theme.COLORS.primary,
+    borderRadius: theme.SIZES.cardRadius,
+    padding: theme.SIZES.l,
     marginBottom: theme.SIZES.l,
   },
+  heroEyebrow: { flexDirection: 'row', alignItems: 'center', gap: theme.SIZES.s, marginBottom: theme.SIZES.m },
+  heroEyebrowText: { ...theme.FONTS.caption, fontWeight: '700', letterSpacing: 0.6, color: theme.COLORS.card },
+  mainTitle: {
+    ...theme.FONTS.h1,
+    color: theme.COLORS.card,
+    marginBottom: theme.SIZES.s,
+  },
+  heroCaption: { ...theme.FONTS.body2, color: theme.COLORS.card, lineHeight: 20 },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',

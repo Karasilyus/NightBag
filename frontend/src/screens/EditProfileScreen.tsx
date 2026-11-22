@@ -15,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import theme from '../constants/theme';
 import { profileService } from '../services/profile.service';
 import type { CustomerProfileDetails } from '../services/profile.service';
+import { isValidOptionalPhone, normalizePhoneInput, PHONE_MAX_LENGTH } from '../utils/phone';
 
 const EditProfileScreen = ({ navigation, route }: any) => {
   const { userId, fullName: initialName, email } = route.params;
@@ -53,8 +54,8 @@ const EditProfileScreen = ({ navigation, route }: any) => {
       setErrorMessage('Ad soyad alanı boş bırakılamaz.');
       return;
     }
-    if (trimmedPhone && !/^\+?[0-9\s()-]{7,20}$/.test(trimmedPhone)) {
-      setErrorMessage('Geçerli bir telefon numarası girin.');
+    if (!isValidOptionalPhone(trimmedPhone)) {
+      setErrorMessage('Telefon numarası 11 rakam olmalı.');
       return;
     }
 
@@ -116,9 +117,10 @@ const EditProfileScreen = ({ navigation, route }: any) => {
             <TextInput
               style={styles.input}
               value={phone}
-              onChangeText={setPhone}
-              placeholder="05xx xxx xx xx"
+              onChangeText={(value) => setPhone(normalizePhoneInput(value))}
+              placeholder="05xx veya 0850 ile başlayan numara"
               keyboardType="phone-pad"
+              maxLength={PHONE_MAX_LENGTH}
               accessibilityLabel="Telefon numarası"
             />
 

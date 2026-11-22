@@ -67,9 +67,8 @@ const DistanceSlider = ({ value, onCommit }: DistanceSliderProps) => {
             setSelectedValue(MAX_DISTANCE);
             onCommit(MAX_DISTANCE);
           }}
-          style={styles.allButton}
         >
-          Tümü
+          <Text style={styles.allButton}>Tümü</Text>
         </TouchableOpacity>
       </View>
     </View>
