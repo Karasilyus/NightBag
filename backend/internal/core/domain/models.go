@@ -136,4 +136,18 @@ type User struct {
 	FullName string `json:"full_name"`
 	Email    string `json:"email"`
 	Role     string `json:"role"`
+	Phone    string `json:"phone,omitempty"`
+}
+
+type UserLocation struct {
+	Latitude  float64 `json:"latitude"`
+	Longitude float64 `json:"longitude"`
+	Label     string  `json:"label"`
+}
+
+type UserPreferences struct {
+	SearchRadiusM        int           `json:"search_radius_m"`
+	NotificationsEnabled bool          `json:"notifications_enabled"`
+	FavoriteCategories   []string      `json:"favorite_categories"`
+	Location             *UserLocation `json:"location"`
 }

@@ -483,3 +483,60 @@ func (r *BagRepository) ListFavoriteListings(ctx context.Context, userID string)
 	}
 	return out, rows.Err()
 }
+
+func (r *BagRepository) GetUserPreferences(ctx context.Context, userID string) (*domain.UserPreferences, error) {
+	var preferences domain.UserPreferences
+	var latitude, longitude *float64
+	var label *string
+	err := r.pool.QueryRow(ctx, `
+		SELECT search_radius_m, notifications_enabled, favorite_categories,
+		       CASE WHEN last_location IS NULL THEN NULL ELSE ST_Y(last_location)::float8 END,
+		       CASE WHEN last_location IS NULL THEN NULL ELSE ST_X(last_location)::float8 END,
+		       location_label
+		FROM users WHERE id = $1`, userID,
+	).Scan(&preferences.SearchRadiusM, &preferences.NotificationsEnabled, &preferences.FavoriteCategories, &latitude, &longitude, &label)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, domain.ErrUserNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	if latitude != nil && longitude != nil {
+		locationLabel := ""
+		if label != nil {
+			locationLabel = *label
+		}
+		preferences.Location = &domain.UserLocation{
+			Latitude: *latitude, Longitude: *longitude, Label: locationLabel,
+		}
+	}
+	if preferences.FavoriteCategories == nil {
+		preferences.FavoriteCategories = []string{}
+	}
+	return &preferences, nil
+}
+
+func (r *BagRepository) UpdateUserPreferences(ctx context.Context, userID string, preferences domain.UserPreferences) (*domain.UserPreferences, error) {
+	var latitude, longitude *float64
+	var label *string
+	if preferences.Location != nil {
+		latitude = &preferences.Location.Latitude
+		longitude = &preferences.Location.Longitude
+		label = &preferences.Location.Label
+	}
+	_, err := r.pool.Exec(ctx, `
+		UPDATE users
+		SET search_radius_m = $2, notifications_enabled = $3, favorite_categories = $4,
+		    last_location = CASE
+		        WHEN $5::float8 IS NULL OR $6::float8 IS NULL THEN NULL
+		        ELSE ST_SetSRID(ST_MakePoint($6::float8, $5::float8), 4326)
+		    END,
+		    location_label = $7
+		WHERE id = $1`,
+		userID, preferences.SearchRadiusM, preferences.NotificationsEnabled,
+		preferences.FavoriteCategories, latitude, longitude, label)
+	if err != nil {
+		return nil, err
+	}
+	return r.GetUserPreferences(ctx, userID)
+}

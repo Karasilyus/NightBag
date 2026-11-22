@@ -38,7 +38,10 @@ apiClient.interceptors.request.use(
 apiClient.interceptors.response.use(
   (response) => response,
   async (error) => {
-    if (error.response?.status === 401) {
+    if (
+      error.response?.status === 401
+      && !String(error.config?.url || '').endsWith('/auth/password')
+    ) {
       await AsyncStorage.multiRemove(['currentUser', 'authToken']);
     }
     return Promise.reject(error);

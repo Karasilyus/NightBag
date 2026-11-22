@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"math"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
@@ -256,6 +257,81 @@ func (s *AuthService) GetAuthUser(ctx context.Context, id string) (*domain.AuthU
 
 func (s *AuthService) MyBusiness(ctx context.Context, ownerID string) (*domain.Business, error) {
 	return s.repo.GetBusinessByOwner(ctx, ownerID)
+}
+
+func (s *AuthService) UpdateMyBusiness(ctx context.Context, ownerID string, b domain.Business) (*domain.Business, error) {
+	b.Name = strings.TrimSpace(b.Name)
+	b.Address = strings.TrimSpace(b.Address)
+	b.District = strings.TrimSpace(b.District)
+	b.Phone = strings.TrimSpace(b.Phone)
+	b.Description = strings.TrimSpace(b.Description)
+
+	switch {
+	case b.Name == "" || len(b.Name) > 120:
+		return nil, invalid("işletme adı zorunlu ve en fazla 120 karakter olmalı")
+	case !domain.BagCategory(b.Category).Valid():
+		return nil, invalid("kategori firin, kafe, tatli veya yemek olmalı")
+	case b.Address == "" || len(b.Address) > 300:
+		return nil, invalid("işletme adresi zorunlu ve en fazla 300 karakter olmalı")
+	case len(b.District) > 100:
+		return nil, invalid("ilçe en fazla 100 karakter olabilir")
+	case len(b.Phone) > 20:
+		return nil, invalid("telefon en fazla 20 karakter olabilir")
+	case len(b.Description) > 2000:
+		return nil, invalid("açıklama en fazla 2000 karakter olabilir")
+	case math.IsNaN(b.Lat) || math.IsInf(b.Lat, 0) || math.IsNaN(b.Lon) || math.IsInf(b.Lon, 0) ||
+		b.Lat < -90 || b.Lat > 90 || b.Lon < -180 || b.Lon > 180 || (b.Lat == 0 && b.Lon == 0):
+		return nil, invalid("geçerli işletme konumu (lat, lon) zorunlu")
+	}
+	if b.PhotoURL != nil {
+		photoURL := strings.TrimSpace(*b.PhotoURL)
+		if photoURL == "" {
+			b.PhotoURL = nil
+		} else {
+			parsed, err := url.ParseRequestURI(photoURL)
+			if err != nil || parsed.Scheme != "https" || parsed.Hostname() == "" || len(photoURL) > 2048 {
+				return nil, invalid("fotoğraf bağlantısı geçerli ve HTTPS olmalı")
+			}
+			b.PhotoURL = &photoURL
+		}
+	}
+	return s.repo.UpdateBusiness(ctx, ownerID, b)
+}
+
+func (s *AuthService) UpdateUserProfile(ctx context.Context, userID, fullName, phone string) (*domain.AuthUser, error) {
+	fullName, phone = strings.TrimSpace(fullName), strings.TrimSpace(phone)
+	if fullName == "" || len(fullName) > 100 {
+		return nil, invalid("ad soyad zorunlu (en fazla 100 karakter)")
+	}
+	if len(phone) > 20 {
+		return nil, invalid("telefon en fazla 20 karakter olabilir")
+	}
+	return s.repo.UpdateUserProfile(ctx, userID, fullName, phone)
+}
+
+func (s *AuthService) ChangePassword(ctx context.Context, userID, currentPassword, newPassword string) (*domain.AuthResult, error) {
+	if len(newPassword) < minPasswordLen || len(newPassword) > maxPasswordLen {
+		return nil, invalid("şifre en az %d karakter olmalı", minPasswordLen)
+	}
+	hash, err := s.repo.GetPasswordHash(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	if !verifyPassword(currentPassword, hash) {
+		return nil, domain.ErrInvalidCredentials
+	}
+	newHash, err := hashPassword(newPassword)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.repo.ChangePassword(ctx, userID, newHash); err != nil {
+		return nil, err
+	}
+	user, err := s.repo.GetAuthUser(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	return &domain.AuthResult{Token: s.issueToken(user.ID, user.TokenVersion), User: *user}, nil
 }
 
 func (s *AuthService) RevokeTokens(ctx context.Context, userID string) error {

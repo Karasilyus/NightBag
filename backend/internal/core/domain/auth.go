@@ -47,14 +47,20 @@ type Business struct {
 	Lon         float64 `json:"lon"`
 	Rating      float64 `json:"rating"`
 	ReviewCount int     `json:"review_count"`
+	Phone       string  `json:"phone"`
+	PhotoURL    *string `json:"photo_url,omitempty"`
 }
 
 type AuthRepository interface {
 	CreateAccount(ctx context.Context, in RegisterInput, passwordHash string) (*AuthUser, error)
 	GetCredentials(ctx context.Context, email string) (*AuthUser, string, error)
+	GetPasswordHash(ctx context.Context, userID string) (string, error)
 	GetBusinessByOwner(ctx context.Context, ownerID string) (*Business, error)
+	UpdateBusiness(ctx context.Context, ownerID string, business Business) (*Business, error)
 	GetAuthUser(ctx context.Context, id string) (*AuthUser, error)
 	SetPasswordIfEmpty(ctx context.Context, email, passwordHash string) error
 	UpdatePasswordHash(ctx context.Context, userID, passwordHash string) error
+	ChangePassword(ctx context.Context, userID, passwordHash string) error
+	UpdateUserProfile(ctx context.Context, userID, fullName, phone string) (*AuthUser, error)
 	RevokeTokens(ctx context.Context, userID string) error
 }

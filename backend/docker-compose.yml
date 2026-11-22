@@ -77,6 +77,7 @@ services:
     depends_on:
       api:
         condition: service_healthy
+    command: sh -c "if [ ! -f node_modules/expo-image-picker/app.plugin.js ]; then npm ci; fi && npm run web -- --host lan"
     ports:
       - "8081:8081"
     volumes:

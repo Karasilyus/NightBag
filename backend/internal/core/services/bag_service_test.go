@@ -57,3 +57,29 @@ func TestReserveRequiresTermsAcceptance(t *testing.T) {
 		t.Fatalf("beklenen geçersiz girdi hatası, alınan: %v", err)
 	}
 }
+
+func TestUpdateUserPreferencesValidatesRadiusAndCategories(t *testing.T) {
+	svc := NewBagService(nil)
+	tests := []domain.UserPreferences{
+		{SearchRadiusM: 499, NotificationsEnabled: true},
+		{SearchRadiusM: 50001, NotificationsEnabled: true},
+		{SearchRadiusM: 5000, FavoriteCategories: []string{"unknown"}},
+		{SearchRadiusM: 5000, FavoriteCategories: []string{"firin", "firin"}},
+	}
+	for _, preferences := range tests {
+		if _, err := svc.UpdateUserPreferences(context.Background(), "user-id", preferences); !errors.Is(err, domain.ErrInvalidInput) {
+			t.Fatalf("beklenen geçersiz tercih hatası, alınan: %v", err)
+		}
+	}
+}
+
+func TestUpdateUserPreferencesValidatesLocation(t *testing.T) {
+	svc := NewBagService(nil)
+	_, err := svc.UpdateUserPreferences(context.Background(), "user-id", domain.UserPreferences{
+		SearchRadiusM: 5000,
+		Location:      &domain.UserLocation{Latitude: math.NaN(), Longitude: 29, Label: "Konum"},
+	})
+	if !errors.Is(err, domain.ErrInvalidInput) {
+		t.Fatalf("beklenen geçersiz konum hatası, alınan: %v", err)
+	}
+}

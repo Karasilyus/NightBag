@@ -36,6 +36,8 @@ const BusinessProfileScreen = ({ navigation, route }: any) => {
     latitude: null,
     longitude: null,
     imageUri: null,
+    photoUrl: null,
+    description: '',
   });
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -118,13 +120,19 @@ const BusinessProfileScreen = ({ navigation, route }: any) => {
     setIsSaving(true);
     setSaveError('');
     try {
-      const nextDetails = { ...details, name: details.name.trim(), address: details.address.trim(), district: details.district.trim(), phone: details.phone.trim() };
+      const nextDetails = {
+        ...details,
+        name: details.name.trim(),
+        address: details.address.trim(),
+        district: details.district.trim(),
+        phone: details.phone.trim(),
+      };
       await profileService.saveBusinessDetails(businessId, nextDetails);
       setDetails(nextDetails);
       navigation.goBack();
     } catch (error) {
       console.error('İşletme profili kaydedilemedi:', error);
-      setSaveError('İşletme profili bu cihazda kaydedilemedi. Tekrar deneyin.');
+      setSaveError('İşletme profili sunucuya kaydedilemedi. Bağlantını kontrol edip tekrar dene.');
     } finally {
       setIsSaving(false);
     }
@@ -162,7 +170,7 @@ const BusinessProfileScreen = ({ navigation, route }: any) => {
         <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
           <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
             <Text style={styles.intro}>
-              İşletme bilgilerin ve seçtiğin görsel bu cihazda saklanır; henüz sunucuya yüklenmez.
+              İşletme bilgilerin hesabınla eşitlenir. Seçtiğin fotoğraf şimdilik yalnızca bu cihazda görünür.
             </Text>
 
             <View style={styles.photoSection}>
@@ -184,7 +192,7 @@ const BusinessProfileScreen = ({ navigation, route }: any) => {
                   ? <ActivityIndicator color={theme.COLORS.primary} />
                   : <><Ionicons name="image-outline" size={18} color={theme.COLORS.primary} /><Text style={styles.photoButtonText}>Fotoğraf seç</Text></>}
               </TouchableOpacity>
-              <Text style={styles.photoHint}>Kare bir işletme fotoğrafı seçebilirsin.</Text>
+              <Text style={styles.photoHint}>Kare fotoğraf bu cihazda saklanır.</Text>
             </View>
 
             <Text style={styles.label}>İşletme adı</Text>
@@ -277,7 +285,7 @@ const BusinessProfileScreen = ({ navigation, route }: any) => {
             >
               {isSaving
                 ? <ActivityIndicator color={theme.COLORS.card} />
-                : <Text style={styles.saveButtonText}>Bu cihazda kaydet</Text>}
+                : <Text style={styles.saveButtonText}>Değişiklikleri kaydet</Text>}
             </TouchableOpacity>
           </ScrollView>
         </KeyboardAvoidingView>

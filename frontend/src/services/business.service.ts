@@ -10,6 +10,14 @@ interface BusinessOverviewResponse {
 interface BusinessResponse {
   id: string;
   name: string;
+  category: string;
+  address: string;
+  district: string;
+  phone: string;
+  lat: number;
+  lon: number;
+  photo_url?: string | null;
+  description?: string;
 }
 
 interface BusinessReservation {

@@ -29,9 +29,9 @@ func (r *BagRepository) CreateAccount(ctx context.Context, in domain.RegisterInp
 	err = tx.QueryRow(ctx, `
 		INSERT INTO users (full_name, email, role, password_hash)
 		VALUES ($1, $2, $3::text::user_role, $4)
-		RETURNING id::text, full_name, email, role::text`,
+		RETURNING id::text, full_name, email, role::text, COALESCE(phone, '')`,
 		in.FullName, in.Email, in.Role, passwordHash,
-	).Scan(&u.ID, &u.FullName, &u.Email, &u.Role)
+	).Scan(&u.ID, &u.FullName, &u.Email, &u.Role, &u.Phone)
 	if isUniqueViolation(err) {
 		return nil, domain.ErrEmailTaken
 	}
@@ -65,12 +65,13 @@ func (r *BagRepository) GetCredentials(ctx context.Context, email string) (*doma
 	var u domain.AuthUser
 	var hash string
 	err := r.pool.QueryRow(ctx, `
-		SELECT u.id::text, u.full_name, u.email, u.role::text, COALESCE(u.password_hash, ''), u.token_version,
+		SELECT u.id::text, u.full_name, u.email, u.role::text, COALESCE(u.phone, ''),
+		       COALESCE(u.password_hash, ''), u.token_version,
 		       (SELECT b.id::text FROM businesses b
 		         WHERE b.owner_id = u.id AND b.is_active
 		         ORDER BY b.created_at LIMIT 1)
 		FROM users u WHERE lower(u.email) = lower($1)`, email,
-	).Scan(&u.ID, &u.FullName, &u.Email, &u.Role, &hash, &u.TokenVersion, &u.BusinessID)
+	).Scan(&u.ID, &u.FullName, &u.Email, &u.Role, &u.Phone, &hash, &u.TokenVersion, &u.BusinessID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, "", domain.ErrUserNotFound
 	}
@@ -85,11 +86,11 @@ func (r *BagRepository) GetBusinessByOwner(ctx context.Context, ownerID string) 
 	err := r.pool.QueryRow(ctx, `
 		SELECT id::text, name, category::text, COALESCE(description, ''), address,
 		       COALESCE(district, ''), city, ST_X(geom)::float8, ST_Y(geom)::float8,
-		       rating::float8, review_count::int
+		       rating::float8, review_count::int, COALESCE(phone, ''), photo_url
 		FROM businesses
 		WHERE owner_id = $1 AND is_active
 		ORDER BY created_at LIMIT 1`, ownerID,
-	).Scan(&b.ID, &b.Name, &b.Category, &b.Description, &b.Address, &b.District, &b.City, &b.Lon, &b.Lat, &b.Rating, &b.ReviewCount)
+	).Scan(&b.ID, &b.Name, &b.Category, &b.Description, &b.Address, &b.District, &b.City, &b.Lon, &b.Lat, &b.Rating, &b.ReviewCount, &b.Phone, &b.PhotoURL)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, domain.ErrBusinessNotFound
 	}
@@ -97,6 +98,57 @@ func (r *BagRepository) GetBusinessByOwner(ctx context.Context, ownerID string) 
 		return nil, err
 	}
 	return &b, nil
+}
+
+func (r *BagRepository) UpdateBusiness(ctx context.Context, ownerID string, b domain.Business) (*domain.Business, error) {
+	tag, err := r.pool.Exec(ctx, `
+		UPDATE businesses
+		SET name = $3, category = $4::text::bag_category, address = $5,
+		    district = NULLIF($6, ''), description = NULLIF($7, ''),
+		    geom = ST_SetSRID(ST_MakePoint($8::float8, $9::float8), 4326),
+		    phone = NULLIF($10, ''), photo_url = $11
+		WHERE id = $1 AND owner_id = $2 AND is_active`,
+		b.ID, ownerID, b.Name, b.Category, b.Address, b.District, b.Description,
+		b.Lon, b.Lat, b.Phone, b.PhotoURL)
+	if err != nil {
+		return nil, err
+	}
+	if tag.RowsAffected() == 0 {
+		return nil, domain.ErrBusinessNotFound
+	}
+	return r.GetBusinessByOwner(ctx, ownerID)
+}
+
+func (r *BagRepository) UpdateUserProfile(ctx context.Context, userID, fullName, phone string) (*domain.AuthUser, error) {
+	_, err := r.pool.Exec(ctx, `
+		UPDATE users SET full_name = $2, phone = NULLIF($3, '') WHERE id = $1`,
+		userID, fullName, phone)
+	if err != nil {
+		return nil, err
+	}
+	return r.GetAuthUser(ctx, userID)
+}
+
+func (r *BagRepository) GetPasswordHash(ctx context.Context, userID string) (string, error) {
+	var hash string
+	err := r.pool.QueryRow(ctx, `SELECT COALESCE(password_hash, '') FROM users WHERE id = $1`, userID).Scan(&hash)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", domain.ErrUserNotFound
+	}
+	return hash, err
+}
+
+func (r *BagRepository) ChangePassword(ctx context.Context, userID, passwordHash string) error {
+	tag, err := r.pool.Exec(ctx, `
+		UPDATE users SET password_hash = $2, token_version = token_version + 1 WHERE id = $1`,
+		userID, passwordHash)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return domain.ErrUserNotFound
+	}
+	return nil
 }
 
 func (r *BagRepository) SetPasswordIfEmpty(ctx context.Context, email, passwordHash string) error {
@@ -119,12 +171,12 @@ func (r *BagRepository) RevokeTokens(ctx context.Context, userID string) error {
 func (r *BagRepository) GetAuthUser(ctx context.Context, id string) (*domain.AuthUser, error) {
 	var u domain.AuthUser
 	err := r.pool.QueryRow(ctx, `
-		SELECT u.id::text, u.full_name, u.email, u.role::text, u.token_version,
+		SELECT u.id::text, u.full_name, u.email, u.role::text, COALESCE(u.phone, ''), u.token_version,
 		       (SELECT b.id::text FROM businesses b
 		         WHERE b.owner_id = u.id AND b.is_active
 		         ORDER BY b.created_at LIMIT 1)
 		FROM users u WHERE u.id = $1`, id,
-	).Scan(&u.ID, &u.FullName, &u.Email, &u.Role, &u.TokenVersion, &u.BusinessID)
+	).Scan(&u.ID, &u.FullName, &u.Email, &u.Role, &u.Phone, &u.TokenVersion, &u.BusinessID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, domain.ErrUserNotFound
 	}

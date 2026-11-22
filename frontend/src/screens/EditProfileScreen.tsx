@@ -66,7 +66,7 @@ const EditProfileScreen = ({ navigation, route }: any) => {
       navigation.goBack();
     } catch (error) {
       console.error('Profil bilgileri kaydedilemedi:', error);
-      setErrorMessage('Profil bilgileri bu cihazda kaydedilemedi. Tekrar deneyin.');
+      setErrorMessage('Profil bilgileri sunucuya kaydedilemedi. Bağlantını kontrol edip tekrar dene.');
     } finally {
       setIsSaving(false);
     }
@@ -93,7 +93,7 @@ const EditProfileScreen = ({ navigation, route }: any) => {
         <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
           <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
             <Text style={styles.description}>
-              Ad ve telefon bilgilerin yalnızca bu cihazda saklanır; hesap sunucusuyla eşitlenmez.
+              Ad ve telefon bilgilerin NightBag hesabınla eşitlenir.
             </Text>
 
             <Text style={styles.label}>Ad soyad</Text>
@@ -131,7 +131,7 @@ const EditProfileScreen = ({ navigation, route }: any) => {
             >
               {isSaving
                 ? <ActivityIndicator color={theme.COLORS.card} />
-                : <Text style={styles.saveButtonText}>Bu cihazda kaydet</Text>}
+                : <Text style={styles.saveButtonText}>Değişiklikleri kaydet</Text>}
             </TouchableOpacity>
           </ScrollView>
         </KeyboardAvoidingView>

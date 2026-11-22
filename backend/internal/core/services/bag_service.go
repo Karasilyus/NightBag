@@ -205,3 +205,37 @@ func (s *BagService) RemoveFavorite(ctx context.Context, userID, businessID stri
 func (s *BagService) ListFavoriteListings(ctx context.Context, userID string) ([]domain.Listing, error) {
 	return s.repo.ListFavoriteListings(ctx, userID)
 }
+
+func (s *BagService) GetUserPreferences(ctx context.Context, userID string) (*domain.UserPreferences, error) {
+	return s.repo.GetUserPreferences(ctx, userID)
+}
+
+func (s *BagService) UpdateUserPreferences(ctx context.Context, userID string, preferences domain.UserPreferences) (*domain.UserPreferences, error) {
+	if preferences.SearchRadiusM < 500 || preferences.SearchRadiusM > 50000 {
+		return nil, invalid("arama yarıçapı 500 ile 50000 metre arasında olmalı")
+	}
+	if preferences.FavoriteCategories == nil {
+		preferences.FavoriteCategories = []string{}
+	}
+	if len(preferences.FavoriteCategories) > 4 {
+		return nil, invalid("en fazla 4 favori kategori seçilebilir")
+	}
+	seen := make(map[string]bool, len(preferences.FavoriteCategories))
+	for _, category := range preferences.FavoriteCategories {
+		if !domain.BagCategory(category).Valid() || seen[category] {
+			return nil, invalid("favori kategoriler geçerli ve tekrarsız olmalı")
+		}
+		seen[category] = true
+	}
+	if preferences.Location != nil {
+		location := preferences.Location
+		if math.IsNaN(location.Latitude) || math.IsInf(location.Latitude, 0) ||
+			math.IsNaN(location.Longitude) || math.IsInf(location.Longitude, 0) ||
+			location.Latitude < -90 || location.Latitude > 90 ||
+			location.Longitude < -180 || location.Longitude > 180 ||
+			len(location.Label) > 100 {
+			return nil, invalid("geçerli konum bilgisi gerekli")
+		}
+	}
+	return s.repo.UpdateUserPreferences(ctx, userID, preferences)
+}

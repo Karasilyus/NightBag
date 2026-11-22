@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import { apiClient } from './api';
 import { favoritesService } from './favorites.service';
+import { preferencesService } from './preferences.service';
 
 type BusinessRegistration = {
   name: string;
@@ -20,6 +21,7 @@ type AuthResponse = {
     email: string;
     role: string;
     business_id?: string;
+    phone?: string;
   };
 };
 
@@ -27,7 +29,7 @@ type StoredUser = AuthResponse['user'] & {
   fullName: string;
 };
 
-const persistAuthResponse = async (data: AuthResponse) => {
+const persistAuthResponse = async (data: AuthResponse, syncPreferences = false) => {
   if (!data.token || !data.user?.id) {
     throw new Error('Sunucudan geçerli bir oturum yanıtı alınamadı.');
   }
@@ -41,6 +43,13 @@ const persistAuthResponse = async (data: AuthResponse) => {
     ['authToken', data.token],
     ['currentUser', JSON.stringify(user)],
   ]);
+  if (syncPreferences) {
+    try {
+      await preferencesService.syncLocalPreferences();
+    } catch (error) {
+      console.error('Kayıtlı keşfet tercihleri hesaba aktarılamadı:', error);
+    }
+  }
   return { data: { token: data.token, user } };
 };
 
@@ -67,7 +76,7 @@ export const authService = {
       role: userData.role,
       business: userData.business,
     });
-    return persistAuthResponse(response.data);
+    return persistAuthResponse(response.data, true);
   },
 
   getCurrentUser: async () => {
@@ -102,8 +111,29 @@ export const authService = {
     };
   },
 
-  updateCurrentUser: async (_updates: { fullName: string }): Promise<{ fullName: string }> => {
-    throw new Error('Profil adı güncelleme servisi henüz kullanılamıyor.');
+  updateCurrentUser: async (updates: { fullName: string; phone: string }): Promise<{ fullName: string; phone: string }> => {
+    const response = await apiClient.put<AuthResponse['user']>('/users/me', {
+      full_name: updates.fullName,
+      phone: updates.phone,
+    });
+    const userJson = await AsyncStorage.getItem('currentUser');
+    const currentUser = userJson ? JSON.parse(userJson) as StoredUser : null;
+    if (currentUser && currentUser.id === response.data.id) {
+      await AsyncStorage.setItem('currentUser', JSON.stringify({
+        ...currentUser,
+        ...response.data,
+        fullName: response.data.full_name,
+      }));
+    }
+    return { fullName: response.data.full_name, phone: response.data.phone || '' };
+  },
+
+  changePassword: async (currentPassword: string, newPassword: string): Promise<void> => {
+    const response = await apiClient.put<AuthResponse>('/auth/password', {
+      current_password: currentPassword,
+      new_password: newPassword,
+    });
+    await persistAuthResponse(response.data);
   },
 
   logout: async () => {
@@ -112,6 +142,7 @@ export const authService = {
       await apiClient.post('/auth/logout');
     } finally {
       await AsyncStorage.multiRemove(['currentUser', 'authToken']);
+      await preferencesService.clearLocalPreferences();
     }
   },
 

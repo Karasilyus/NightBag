@@ -256,7 +256,7 @@ const ProfileScreen = ({ navigation }: any) => {
               />
             </View>
           </View>
-          <Text style={styles.preferenceNote}>Bildirim tercihi bu cihazda saklanır; bildirim gönderimi backend entegrasyonu gerektirir.</Text>
+          <Text style={styles.preferenceNote}>Bildirim tercihin hesabında saklanır.</Text>
 
           <TouchableOpacity style={styles.menuItem} onPress={() => setActiveModal('privacy')}>
             <View style={styles.menuLeft}>
@@ -369,7 +369,7 @@ const ProfileScreen = ({ navigation }: any) => {
             {activeModal === 'personalization' && (
               <>
                 <Text style={styles.modalTitle}>Keşfet tercihleri</Text>
-                <Text style={styles.modalDescription}>İlgilendiğin işletme türlerini seç. Tercihlerin bu cihazda saklanır.</Text>
+                <Text style={styles.modalDescription}>İlgilendiğin işletme türlerini seç. Tercihlerin hesabında saklanır.</Text>
                 <View style={styles.categoryOptions}>
                   {PERSONALIZATION_CATEGORIES.map((category) => {
                     const selected = preferences.favoriteCategories.includes(category);
@@ -397,7 +397,7 @@ const ProfileScreen = ({ navigation }: any) => {
               <>
                 <Text style={styles.modalTitle}>Hesap ve gizlilik</Text>
                 <Text style={styles.modalDescription}>
-                  Profil adı ve telefon bu cihazda saklanır; hesap sunucusuyla eşitlenmez. E-posta mevcut hesap bilgilerinden gösterilir. Hesap silme ve sunucudaki kişisel verileri yönetme özellikleri backend desteği gerektirir.
+                  Profil adı, telefon ve keşfet tercihlerin hesabınla eşitlenir. E-posta mevcut hesap bilgilerinden gösterilir. Hesap silme ve kişisel verilerin tamamen silinmesi şu anda desteklenmiyor.
                 </Text>
                 <TouchableOpacity style={styles.modalPrimaryButton} onPress={() => setActiveModal(null)}>
                   <Text style={styles.modalPrimaryText}>Anladım</Text>

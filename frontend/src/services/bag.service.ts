@@ -80,13 +80,8 @@ export const bagService = {
    * Tek bir çanta ilanının detayını getirir.
    * BagDetailScreen'de kullanılır.
    */
-  getBagDetail: async (id: string): Promise<any | null> => {
-    try {
-      const response = await apiClient.get(`/listings/${id}`);
-      return mapListingToBag(response.data);
-    } catch (error) {
-      console.error('Çanta detayı yüklenemedi:', error);
-      return null;
-    }
+  getBagDetail: async (id: string): Promise<any> => {
+    const response = await apiClient.get(`/listings/${id}`);
+    return mapListingToBag(response.data);
   },
 };

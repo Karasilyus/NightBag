@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, SafeAreaView, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import theme from '../constants/theme';
-import { preferencesService } from '../services/preferences.service';
+import { favoritesService } from '../services/favorites.service';
 
 const BagDetailScreen = ({ route, navigation }: any) => {
   const bag = route.params?.bag;
@@ -16,27 +16,26 @@ const BagDetailScreen = ({ route, navigation }: any) => {
     ? bag.allergenNote
     : 'Alerjen bilgisi paylaşılmamış. Alerjin varsa rezervasyondan önce işletmeye danış.';
   const [isSaved, setIsSaved] = useState(false);
+  const [isUpdatingFavorite, setIsUpdatingFavorite] = useState(false);
 
   useEffect(() => {
-    if (!bag?.id) return;
-    preferencesService.getSavedBags()
-      .then((savedBags) => setIsSaved(savedBags.some((savedBag) => savedBag.id === bag.id)))
-      .catch((error) => console.error('Kaydedilen çantalar yüklenemedi:', error));
-  }, [bag?.id]);
+    if (!bag?.businessId) return;
+    favoritesService.isBusinessFavorited(bag.businessId)
+      .then(setIsSaved)
+      .catch((error) => console.error('Favori işletme yüklenemedi:', error));
+  }, [bag?.businessId]);
 
   const toggleFavorite = async () => {
-    if (!bag?.id) return;
+    if (!bag?.businessId || isUpdatingFavorite) return;
+    setIsUpdatingFavorite(true);
     try {
-      setIsSaved(await preferencesService.toggleSavedBag({
-        id: bag.id,
-        name: bag.businessName,
-        type: bag.bagType,
-        distance: bag.distance,
-        imageUrl: bag.imageUrl,
-      }));
+      await favoritesService.setFavorite(bag.businessId, isSaved);
+      setIsSaved((saved) => !saved);
     } catch (error) {
-      console.error('Çanta kaydedilemedi:', error);
-      Alert.alert('Hata', 'Çanta kaydedilirken bir sorun oluştu.');
+      console.error('Favori işletme güncellenemedi:', error);
+      Alert.alert('Hata', 'Favori işletme güncellenemedi. Giriş yaptığından emin olup tekrar dene.');
+    } finally {
+      setIsUpdatingFavorite(false);
     }
   };
 

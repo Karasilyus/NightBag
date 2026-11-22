@@ -95,12 +95,19 @@ never commit an unrestricted key or put a server-side key here.
 
 ## Frontend account and discovery behavior
 
-Registration checks password strength locally with zxcvbn and checks for known
-password leaks through the Have I Been Pwned Pwned Passwords range API. The
-password itself and its full SHA-1 hash are not sent; only the first five
-characters of the hash are used for the range request. Registration requires
-this online check to complete. Password reset/change screens are preparatory
-UI only until the backend provides verified reset and password-change flows.
+Registration and password changes check strength locally with zxcvbn and check
+for known password leaks through the Have I Been Pwned Pwned Passwords range
+API. The password itself and its full SHA-1 hash are not sent; only the first
+five characters of the hash are used for the range request. Signed-in users can
+change their password after verifying the current password. Email-based account
+recovery still requires a verified email delivery flow and is not available.
+
+Customer profile details, business details, discovery preferences, favorites,
+reservations, and business listings are stored through the backend API.
+Business profile photos selected from the device are local-only; use an HTTPS
+photo URL in a listing until image upload/storage is configured. Checkout
+currently creates a reservation for payment at pickup; online payment is not
+connected to a payment provider.
 
 The discovery distance control covers 2–50 km. The current nearby-listings API
 caps radius at 50 km and returns at most 50 listings, so “Tümü” currently means

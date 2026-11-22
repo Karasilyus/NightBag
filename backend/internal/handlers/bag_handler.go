@@ -39,9 +39,13 @@ func (h *BagHandler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v1/auth/register", h.register)
 	mux.HandleFunc("POST /api/v1/auth/login", h.login)
 	mux.HandleFunc("POST /api/v1/auth/logout", h.auth(h.logout))
+	mux.HandleFunc("PUT /api/v1/auth/password", h.auth(h.changePassword))
 
 	// Müşteri
 	mux.HandleFunc("GET /api/v1/users/me/stats", h.auth(h.getUserStats))
+	mux.HandleFunc("PUT /api/v1/users/me", h.auth(h.updateMe))
+	mux.HandleFunc("GET /api/v1/users/me/preferences", h.auth(h.getUserPreferences))
+	mux.HandleFunc("PUT /api/v1/users/me/preferences", h.auth(h.updateUserPreferences))
 	mux.HandleFunc("POST /api/v1/listings/{id}/reserve", h.auth(h.reserve))
 	mux.HandleFunc("GET /api/v1/reservations", h.auth(h.listReservations))
 	mux.HandleFunc("POST /api/v1/reservations/{id}/cancel", h.auth(h.cancelReservation))
@@ -55,6 +59,7 @@ func (h *BagHandler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v1/business/{businessID}/listings", h.auth(h.createListing))
 	mux.HandleFunc("GET /api/v1/business/overview", h.auth(h.overview))
 	mux.HandleFunc("GET /api/v1/business/me", h.auth(h.myBusiness))
+	mux.HandleFunc("PUT /api/v1/business/me", h.auth(h.updateMyBusiness))
 	mux.HandleFunc("GET /api/v1/business/reservations", h.auth(h.businessReservations))
 	mux.HandleFunc("POST /api/v1/business/pickups", h.auth(h.completePickup))
 }
@@ -367,4 +372,97 @@ func (h *BagHandler) listFavorites(w http.ResponseWriter, r *http.Request, userI
 		return
 	}
 	writeJSON(w, http.StatusOK, items)
+}
+
+func (h *BagHandler) updateMe(w http.ResponseWriter, r *http.Request, userID string) {
+	var req struct {
+		FullName string `json:"full_name"`
+		Phone    string `json:"phone"`
+	}
+	if !decode(w, r, &req) {
+		return
+	}
+	user, err := h.authSvc.UpdateUserProfile(r.Context(), userID, req.FullName, req.Phone)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, user)
+}
+
+func (h *BagHandler) getUserPreferences(w http.ResponseWriter, r *http.Request, userID string) {
+	preferences, err := h.svc.GetUserPreferences(r.Context(), userID)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, preferences)
+}
+
+func (h *BagHandler) updateUserPreferences(w http.ResponseWriter, r *http.Request, userID string) {
+	var preferences domain.UserPreferences
+	if !decode(w, r, &preferences) {
+		return
+	}
+	savedPreferences, err := h.svc.UpdateUserPreferences(r.Context(), userID, preferences)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, savedPreferences)
+}
+
+func (h *BagHandler) updateMyBusiness(w http.ResponseWriter, r *http.Request, ownerID string) {
+	var req struct {
+		Name        string  `json:"name"`
+		Category    string  `json:"category"`
+		Description string  `json:"description"`
+		Address     string  `json:"address"`
+		District    string  `json:"district"`
+		Lat         float64 `json:"lat"`
+		Lon         float64 `json:"lon"`
+		Phone       string  `json:"phone"`
+		PhotoURL    *string `json:"photo_url"`
+	}
+	if !decode(w, r, &req) {
+		return
+	}
+	current, err := h.authSvc.MyBusiness(r.Context(), ownerID)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	updated, err := h.authSvc.UpdateMyBusiness(r.Context(), ownerID, domain.Business{
+		ID: current.ID, Name: req.Name, Category: req.Category, Description: req.Description,
+		Address: req.Address, District: req.District, Lat: req.Lat, Lon: req.Lon,
+		Phone: req.Phone, PhotoURL: req.PhotoURL,
+	})
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, updated)
+}
+
+func (h *BagHandler) changePassword(w http.ResponseWriter, r *http.Request, userID string) {
+	if !h.loginLim.allow("password:" + userID) {
+		w.Header().Set("Retry-After", "900")
+		writeJSON(w, http.StatusTooManyRequests, map[string]string{
+			"error": "çok fazla şifre değiştirme isteği, lütfen 15 dakika sonra tekrar deneyin",
+		})
+		return
+	}
+	var req struct {
+		CurrentPassword string `json:"current_password"`
+		NewPassword     string `json:"new_password"`
+	}
+	if !decode(w, r, &req) {
+		return
+	}
+	result, err := h.authSvc.ChangePassword(r.Context(), userID, req.CurrentPassword, req.NewPassword)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
 }
