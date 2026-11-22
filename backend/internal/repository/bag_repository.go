@@ -368,6 +368,11 @@ func (r *BagRepository) CompletePickup(ctx context.Context, ownerID, code string
 		   AND b.owner_id = $1
 		   AND r.pickup_code = $2
 		   AND r.status = 'pending_pickup'
+		   AND NOT EXISTS (
+		       SELECT 1 FROM payment_orders po
+		       WHERE po.reservation_id = r.id
+		         AND po.refund_status IN ('pending', 'unknown')
+		   )
 		RETURNING r.id::text`, ownerID, code,
 	).Scan(&id)
 	if errors.Is(err, pgx.ErrNoRows) {

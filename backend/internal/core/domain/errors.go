@@ -17,4 +17,7 @@ var (
 	ErrBusinessNotFound    = errors.New("işletme bulunamadı")
 	ErrOwnListing          = errors.New("kendi işletmenizin çantasını rezerve edemezsiniz")
 	ErrReservationLimit    = errors.New("aktif rezervasyon çanta sınırına ulaştınız")
+	ErrRefundPending       = errors.New("iade sonucu doğrulanamadı; tekrar iptal isteği göndermeyin")
+	ErrRefundFailed        = errors.New("iade tamamlanamadı")
+	ErrRefundNotRetryable  = errors.New("iade şu anda tamamlanamadı; destek ekibiyle iletişime geçin")
 )

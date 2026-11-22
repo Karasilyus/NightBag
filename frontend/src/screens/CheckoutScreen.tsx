@@ -1,8 +1,11 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, SafeAreaView, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, SafeAreaView, ActivityIndicator, Alert, Platform } from 'react-native';
+import * as WebBrowser from 'expo-web-browser';
 import { Ionicons } from '@expo/vector-icons';
 import theme from '../constants/theme';
 import { reservationService } from '../services/reservation.service';
+import { paymentService } from '../services/payment.service';
+import { authService } from '../services/auth.service';
 import LegalDraftNotice from '../components/LegalDraftNotice';
 
 const CheckoutScreen = ({ route, navigation }: any) => {
@@ -20,13 +23,49 @@ const CheckoutScreen = ({ route, navigation }: any) => {
   const pricePerBag = Number.isFinite(bag?.price) ? bag.price : 0;
 
   const handleConfirmReservation = async () => {
-    if (!bag?.id || maxQuantity === 0 || isOnlinePayment || !termsAccepted || !draftAcknowledged) return;
+    if (!bag?.id || maxQuantity === 0 || !draftAcknowledged || !termsAccepted) return;
+    const currentUser = await authService.getCurrentUser();
+    if (!currentUser) {
+      Alert.alert('Giriş gerekli', 'Ödeme veya rezervasyon için önce giriş yapmalısınız.', [
+        { text: 'İptal', style: 'cancel' },
+        { text: 'Giriş yap', onPress: () => navigation.navigate('Auth') },
+      ]);
+      return;
+    }
     setIsReserving(true);
     try {
+      if (isOnlinePayment) {
+        const checkout = await paymentService.startCheckout(bag.id, quantity, termsAccepted);
+        if (!checkout.payment_page_url) {
+          throw new Error('Ödeme sayfası adresi alınamadı.');
+        }
+        if (Platform.OS === 'web' && typeof window !== 'undefined') {
+          window.location.assign(checkout.payment_page_url);
+          return;
+        } else {
+          const browserResult = await WebBrowser.openBrowserAsync(checkout.payment_page_url);
+          if (browserResult.type === 'cancel') {
+            throw new Error('Ödeme işlemi tarayıcıda iptal edildi.');
+          }
+        }
+        const status = await paymentService.waitForPaid(checkout.order_id);
+        if (status.status !== 'paid') {
+          throw new Error('Ödeme tamamlanmadı veya iptal edildi.');
+        }
+        const reservations = await reservationService.getReservations('Aktif');
+        const reservation = reservations.data.find(item => item.id === status.reservation_id);
+        if (!reservation) {
+          throw new Error('Ödeme başarılı ancak rezervasyon henüz görüntülenemedi.');
+        }
+        navigation.navigate('ReservationConfirmed', { reservation });
+        return;
+      }
       const reservation = await reservationService.reserve(bag.id, quantity, termsAccepted);
       navigation.navigate('ReservationConfirmed', { reservation });
     } catch (error: any) {
-      const errMsg = error.response?.data?.error || error.message || 'Rezervasyon oluşturulamadı. Lütfen tekrar deneyin.';
+      const errMsg = error.response?.status === 401
+        ? 'Oturum süreniz dolmuş. Lütfen tekrar giriş yapın.'
+        : error.response?.data?.error || error.message || 'Rezervasyon oluşturulamadı. Lütfen tekrar deneyin.';
       Alert.alert('Rezervasyon Hatası', errMsg);
     } finally {
       setIsReserving(false);
@@ -148,8 +187,8 @@ const CheckoutScreen = ({ route, navigation }: any) => {
             >
               <Ionicons name="storefront-outline" size={20} color={theme.COLORS.primary} />
               <View style={styles.paymentOptionInfo}>
-                <Text style={styles.paymentOptionTitle}>İşletmede ödeme</Text>
-                <Text style={styles.paymentOptionDescription}>Tercih bu oturumda tutulur; sunucuya iletilmiyor</Text>
+                <Text style={styles.paymentOptionTitle}>Rezervasyonu ayırt</Text>
+                <Text style={styles.paymentOptionDescription}>Ödeme teslim sırasında işletmede yapılır</Text>
               </View>
               {paymentPreference === 'pickup'
                 ? <Ionicons name="checkmark-circle" size={20} color={theme.COLORS.primary} />
@@ -164,33 +203,28 @@ const CheckoutScreen = ({ route, navigation }: any) => {
               <Ionicons name="card-outline" size={20} color={paymentPreference === 'online' ? theme.COLORS.primary : theme.COLORS.textSecondary} />
               <View style={styles.paymentOptionInfo}>
                 <Text style={paymentPreference === 'online' ? styles.paymentOptionTitle : styles.paymentOptionDisabledTitle}>Online ödeme</Text>
-                <Text style={styles.paymentOptionDescription}>Ödeme sağlayıcısı ve sunucu bağlantısı henüz yok</Text>
+                <Text style={styles.paymentOptionDescription}>iyzico ile güvenli online ödeme</Text>
               </View>
               {paymentPreference === 'online'
                 ? <Ionicons name="checkmark-circle" size={20} color={theme.COLORS.primary} />
-                : <Text style={styles.comingSoon}>Yakında</Text>}
+                : null}
             </TouchableOpacity>
             <Text style={styles.paymentDisclaimer}>
               {isOnlinePayment
-                ? 'Online ödeme henüz etkin değil. Bu seçiliyken rezervasyon oluşturulmaz; kart bilgisi istenmez ve ödeme tahsil edilmez.'
-                : 'Ödeme arayüzü şimdilik taslaktır. Rezervasyon servisi ödeme tercihi almıyor; kart bilgisi istenmez ve ödeme tahsil edilmez.'}
+                ? 'Ödeme için iyzico güvenli sayfası açılır. Başarılı ödeme sonrası rezervasyon otomatik oluşturulur.'
+                : 'İşletmede ödeme seçildiğinde ödeme alınmaz; rezervasyon oluşturulur.'}
             </Text>
             {isOnlinePayment && (
               <View style={styles.paymentPreview}>
                 <View style={styles.previewHeading}>
                   <Ionicons name="lock-closed-outline" size={18} color={theme.COLORS.card} />
-                  <Text style={styles.previewLabel}>ÖDEME EKRANI · ÖNİZLEME</Text>
+                  <Text style={styles.previewLabel}>GÜVENLİ ÖDEME</Text>
                 </View>
-                <Text style={styles.previewTitle}>Güvenli ödeme</Text>
+                <Text style={styles.previewTitle}>iyzico ödeme sayfası</Text>
                 <Text style={styles.previewDescription}>
-                  Kart bilgileri, sağlayıcı bağlantısı kurulduğunda güvenli ödeme ekranında girilecek.
+                  Kart bilgileri doğrudan sağlayıcının güvenli ekranında girilir; uygulama kart bilgisi toplamaz.
                 </Text>
-                <View style={styles.previewFields}>
-                  <Text style={styles.previewField}>Kart numarası</Text>
-                  <Text style={styles.previewField}>Son kullanma tarihi</Text>
-                  <Text style={styles.previewField}>Güvenlik kodu</Text>
-                </View>
-                <Text style={styles.previewDescription}>Bu alanlar devre dışıdır; ödeme veya rezervasyon oluşturulmaz.</Text>
+                <Text style={styles.previewDescription}>Ödeme tamamlanınca rezervasyon otomatik olarak oluşturulur.</Text>
               </View>
             )}
           </View>
@@ -223,9 +257,12 @@ const CheckoutScreen = ({ route, navigation }: any) => {
       {/* Alt Sabit Bar */}
       <View style={styles.bottomBar}>
         <TouchableOpacity 
-          style={[styles.confirmBtn, (isReserving || maxQuantity === 0 || isOnlinePayment || !termsAccepted || !draftAcknowledged) && { opacity: 0.7 }]}
+          style={[
+            styles.confirmBtn,
+            (isReserving || maxQuantity === 0 || !draftAcknowledged || !termsAccepted) && styles.confirmBtnDisabled,
+          ]}
           onPress={handleConfirmReservation}
-          disabled={isReserving || maxQuantity === 0 || isOnlinePayment || !termsAccepted || !draftAcknowledged}
+          disabled={isReserving || maxQuantity === 0 || !draftAcknowledged || !termsAccepted}
         >
           {isReserving ? (
             <ActivityIndicator color={theme.COLORS.card} />
@@ -233,16 +270,16 @@ const CheckoutScreen = ({ route, navigation }: any) => {
             <>
               <Text style={styles.confirmBtnText}>
                 {isOnlinePayment
-                  ? 'Online ödeme kullanılamıyor'
+                  ? 'iyzico ile öde'
                   : maxQuantity > 0 ? 'Rezervasyonu onayla' : hasStockInfo ? 'Stok tükendi' : 'Stok bilgisi yok'}
               </Text>
-              {!isOnlinePayment ? <Ionicons name="arrow-forward" size={20} color={theme.COLORS.card} /> : null}
+              <Ionicons name="arrow-forward" size={20} color={theme.COLORS.card} />
             </>
           )}
         </TouchableOpacity>
         <Text style={styles.bottomNote}>
           {isOnlinePayment
-            ? 'Online ödeme bağlantısı tamamlanana kadar rezervasyon oluşturulmaz.'
+            ? 'Ödeme sağlayıcısı açılır; başarılı ödemeden sonra rezervasyon oluşturulur.'
             : 'Rezervasyon oluşturulur; bu adımda ödeme alınmaz.'}
         </Text>
       </View>
@@ -520,6 +557,10 @@ const styles = StyleSheet.create({
     borderRadius: theme.SIZES.buttonRadius,
     gap: theme.SIZES.xs,
     marginBottom: theme.SIZES.s,
+  },
+  confirmBtnDisabled: {
+    backgroundColor: theme.COLORS.border,
+    opacity: 0.75,
   },
   confirmBtnText: {
     ...theme.FONTS.body1,

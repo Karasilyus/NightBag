@@ -107,14 +107,37 @@ func main() {
 					  AND (l.pickup_date + l.pickup_end) < (now() AT TIME ZONE 'Europe/Istanbul')`); err != nil {
 					log.Printf("expire job: %v", err)
 				}
+				if _, err := pool.Exec(ctx, `
+					WITH expired AS (
+						SELECT id, listing_id, quantity
+						FROM payment_orders
+						WHERE status = 'pending_payment' AND expires_at <= now()
+						FOR UPDATE
+					),
+					returned AS (
+						UPDATE bag_listings l
+						SET quantity_remaining = l.quantity_remaining + e.quantity,
+						    status = CASE WHEN l.status = 'sold_out' THEN 'published'::listing_status ELSE l.status END
+						FROM expired e
+						WHERE l.id = e.listing_id
+					)
+					UPDATE payment_orders po
+					SET status = 'expired', updated_at = now()
+					FROM expired e
+					WHERE po.id = e.id`); err != nil {
+					log.Printf("payment expire job: %v", err)
+				}
 			}
 		}
 	}()
 
 	repo := repository.NewBagRepository(pool)
+	paymentRepo := repository.NewPaymentRepository(pool)
 	svc := services.NewBagService(repo)
 	authSvc := services.NewAuthService(repo, authSecret)
-	bagHandler := handlers.NewBagHandler(svc, authSvc)
+	paymentService := services.NewPaymentService(paymentRepo)
+	bagHandler := handlers.NewBagHandler(svc, authSvc, paymentService)
+	paymentHandler := handlers.NewPaymentHandler(paymentService, authSvc)
 
 	if !isProd {
 		if pw := getenv("SEED_PASSWORD", ""); pw != "" {
@@ -134,6 +157,7 @@ func main() {
 		_, _ = w.Write([]byte("ok"))
 	})
 	bagHandler.Register(mux)
+	paymentHandler.Register(mux)
 
 	srv := &http.Server{
 		Addr:              ":" + port,

@@ -31,6 +31,9 @@ services:
 
   api:
     build: .
+    env_file:
+      - path: .env
+        required: false
     depends_on:
       seed:
         condition: service_completed_successfully

@@ -52,9 +52,13 @@ const MyOrdersScreen = () => {
       await reservationService.cancelReservation(reservationToCancel.id);
       setReservationToCancel(null);
       setRetryCount((count) => count + 1);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Rezervasyon iptal edilemedi:', error);
-      setCancellationError('Rezervasyon iptal edilemedi. Lütfen tekrar deneyin.');
+      setCancellationError(
+        error.response?.data?.error
+        || error.message
+        || 'Rezervasyon iptal edilemedi. Lütfen tekrar deneyin.'
+      );
     } finally {
       setIsCancelling(false);
     }
@@ -182,6 +186,10 @@ const MyOrdersScreen = () => {
           <Pressable style={styles.codeModal} onPress={(event) => event.stopPropagation()}>
             <Text style={styles.modalTitle}>Rezervasyonu iptal et?</Text>
             <Text style={styles.modalHint}>{reservationToCancel?.bagTitle} rezervasyonu iptal edilecek.</Text>
+            <Text style={styles.modalHint}>
+              Online ödemeyle alındıysa iptal, iyzico tam iadeyi onayladıktan sonra kesinleşir.
+              İade sonucu belirsizse tekrar iptal isteği göndermeyin.
+            </Text>
             {cancellationError ? <Text style={styles.cancellationError}>{cancellationError}</Text> : null}
             <View style={styles.cancelActions}>
               <TouchableOpacity

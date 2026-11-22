@@ -42,6 +42,10 @@ services:
       APP_ENV: production
       CORS_ORIGIN: "https://${DOMAIN:?Set DOMAIN in .env.production}"
       AUTH_SECRET: "${AUTH_SECRET:?Set AUTH_SECRET in .env.production}"
+      IYZICO_API_KEY: "${IYZICO_API_KEY:-}"
+      IYZICO_SECRET_KEY: "${IYZICO_SECRET_KEY:-}"
+      IYZICO_BASE_URL: "${IYZICO_BASE_URL:-https://sandbox-api.iyzipay.com}"
+      IYZICO_CALLBACK_URL: "${IYZICO_CALLBACK_URL:-https://${DOMAIN:?Set DOMAIN in .env.production}/api/v1/payments/iyzico/callback}"
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/healthz >/dev/null || exit 1"]
       interval: 5s

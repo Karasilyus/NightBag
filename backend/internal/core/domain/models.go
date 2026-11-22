@@ -151,3 +151,17 @@ type UserPreferences struct {
 	FavoriteCategories   []string      `json:"favorite_categories"`
 	Location             *UserLocation `json:"location"`
 }
+
+type CheckoutInitResult struct {
+	OrderID             string `json:"order_id"`
+	PaymentID           string `json:"payment_id,omitempty"`
+	Token               string `json:"token"`
+	CheckoutFormContent string `json:"checkout_form_content,omitempty"`
+	PaymentPageURL      string `json:"payment_page_url,omitempty"`
+}
+
+type PaymentOrderStatus struct {
+	OrderID       string  `json:"order_id"`
+	Status        string  `json:"status"`
+	ReservationID *string `json:"reservation_id,omitempty"`
+}

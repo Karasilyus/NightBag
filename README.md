@@ -106,9 +106,14 @@ Customer profile details, business details, discovery preferences, favorites,
 reservations, and business listings are stored through the backend API.
 Business profile photos selected from the device are local-only; use an HTTPS
 photo URL in a listing until image upload/storage is configured. Checkout
-currently creates a reservation for payment at pickup; online payment is not
-connected to a payment provider. The online payment screen is a preview only:
-it collects no card data and cannot create a reservation.
+supports pickup reservations and iyzico Checkout Form sandbox/production
+payments. For online payments, set `IYZICO_API_KEY`, `IYZICO_SECRET_KEY`,
+`IYZICO_BASE_URL`, and `IYZICO_CALLBACK_URL` on the API service. The callback
+is processed on the server and the client never collects or submits card data.
+Eligible online reservations can be cancelled until the pickup window ends;
+the cancellation completes only after iyzico confirms a full refund. If the
+provider response is ambiguous, the reservation remains active and the refund
+must be reconciled before another cancellation attempt.
 
 The registration and order information screens are explicitly labelled drafts,
 not KVKK consent records or legally approved notices. The draft acknowledgement

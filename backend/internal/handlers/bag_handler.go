@@ -15,15 +15,17 @@ import (
 type BagHandler struct {
 	svc           *services.BagService
 	authSvc       *services.AuthService
+	paymentSvc    *services.PaymentService
 	loginLim      *loginLimiter
 	authIPLim     *loginLimiter
 	registerIPLim *loginLimiter
 }
 
-func NewBagHandler(svc *services.BagService, authSvc *services.AuthService) *BagHandler {
+func NewBagHandler(svc *services.BagService, authSvc *services.AuthService, paymentSvc *services.PaymentService) *BagHandler {
 	return &BagHandler{
 		svc:           svc,
 		authSvc:       authSvc,
+		paymentSvc:    paymentSvc,
 		loginLim:      newDefaultLoginLimiter(),
 		authIPLim:     newLoginLimiter(60, 15*time.Minute),
 		registerIPLim: newLoginLimiter(5, time.Hour),
@@ -107,8 +109,11 @@ func writeError(w http.ResponseWriter, err error) {
 		errors.Is(err, domain.ErrListingNotAvailable),
 		errors.Is(err, domain.ErrInsufficientStock),
 		errors.Is(err, domain.ErrPickupWindowPassed),
-		errors.Is(err, domain.ErrNotCancellable):
+		errors.Is(err, domain.ErrNotCancellable),
+		errors.Is(err, domain.ErrRefundPending):
 		status, msg = http.StatusConflict, err.Error()
+	case errors.Is(err, domain.ErrRefundFailed), errors.Is(err, domain.ErrRefundNotRetryable):
+		status, msg = http.StatusBadGateway, err.Error()
 	default:
 		log.Printf("internal error: %v", err)
 	}
@@ -225,7 +230,7 @@ func (h *BagHandler) cancelReservation(w http.ResponseWriter, r *http.Request, u
 	if !ok {
 		return
 	}
-	if err := h.svc.CancelReservation(r.Context(), userID, id); err != nil {
+	if err := h.paymentSvc.CancelReservation(r.Context(), userID, id, clientIP(r)); err != nil {
 		writeError(w, err)
 		return
 	}
