@@ -18,4 +18,6 @@ type BagRepository interface {
 	ListFavoriteListings(ctx context.Context, userID string) ([]Listing, error)
 	GetUserPreferences(ctx context.Context, userID string) (*UserPreferences, error)
 	UpdateUserPreferences(ctx context.Context, userID string, preferences UserPreferences) (*UserPreferences, error)
+	RegisterPushToken(ctx context.Context, userID, token, platform string) error
+	RemovePushToken(ctx context.Context, userID, token string) error
 }

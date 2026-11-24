@@ -136,8 +136,10 @@ func main() {
 	svc := services.NewBagService(repo)
 	authSvc := services.NewAuthService(repo, authSecret)
 	paymentService := services.NewPaymentService(paymentRepo)
+	notificationDispatcher := services.NewNotificationDispatcher(pool, getenv("EXPO_ACCESS_TOKEN", ""))
 	bagHandler := handlers.NewBagHandler(svc, authSvc, paymentService)
 	paymentHandler := handlers.NewPaymentHandler(paymentService, authSvc)
+	go notificationDispatcher.Run(ctx)
 
 	if !isProd {
 		if pw := getenv("SEED_PASSWORD", ""); pw != "" {

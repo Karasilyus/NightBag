@@ -239,3 +239,27 @@ func (s *BagService) UpdateUserPreferences(ctx context.Context, userID string, p
 	}
 	return s.repo.UpdateUserPreferences(ctx, userID, preferences)
 }
+
+func isValidExpoPushToken(token string) bool {
+	isExpoToken := strings.HasPrefix(token, "ExpoPushToken[") || strings.HasPrefix(token, "ExponentPushToken[")
+	return isExpoToken && strings.HasSuffix(token, "]") && len(token) <= 256 && len(token) >= 18
+}
+
+func (s *BagService) RegisterPushToken(ctx context.Context, userID, token, platform string) error {
+	token = strings.TrimSpace(token)
+	if !isValidExpoPushToken(token) {
+		return invalid("geçerli bir Expo push token gerekli")
+	}
+	if platform != "ios" && platform != "android" {
+		return invalid("platform ios veya android olmalı")
+	}
+	return s.repo.RegisterPushToken(ctx, userID, token, platform)
+}
+
+func (s *BagService) RemovePushToken(ctx context.Context, userID, token string) error {
+	token = strings.TrimSpace(token)
+	if !isValidExpoPushToken(token) {
+		return invalid("geçerli bir Expo push token gerekli")
+	}
+	return s.repo.RemovePushToken(ctx, userID, token)
+}

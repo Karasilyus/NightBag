@@ -83,3 +83,22 @@ func TestUpdateUserPreferencesValidatesLocation(t *testing.T) {
 		t.Fatalf("beklenen geçersiz konum hatası, alınan: %v", err)
 	}
 }
+
+func TestRegisterPushTokenValidatesTokenAndPlatform(t *testing.T) {
+	svc := NewBagService(nil)
+	tests := []struct {
+		name, token, platform string
+	}{
+		{name: "missing token", platform: "ios"},
+		{name: "invalid token format", token: "not-a-push-token", platform: "ios"},
+		{name: "invalid platform", token: "ExpoPushToken[abc123]", platform: "web"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			err := svc.RegisterPushToken(context.Background(), "user-id", test.token, test.platform)
+			if !errors.Is(err, domain.ErrInvalidInput) {
+				t.Fatalf("beklenen geçersiz girdi hatası, alınan: %v", err)
+			}
+		})
+	}
+}

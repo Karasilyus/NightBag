@@ -56,6 +56,14 @@ const ProfileScreen = ({ navigation }: any) => {
 
       if (preferencesResult.status === 'fulfilled') setPreferences(preferencesResult.value);
       if (currentUserResult.status === 'fulfilled' && currentUserResult.value) {
+        if (
+          preferencesResult.status === 'fulfilled'
+          && preferencesResult.value.notificationsEnabled
+        ) {
+          void notificationsService.registerPushToken().catch((error) => {
+            console.error('Sunucu bildirimleri eşitlenemedi:', error);
+          });
+        }
         try {
           profileDetails = await profileService.getCustomerDetails(
             currentUserResult.value.id,
@@ -150,6 +158,7 @@ const ProfileScreen = ({ navigation }: any) => {
   const updateNotificationPreference = async (notificationsEnabled: boolean) => {
     setIsUpdatingNotifications(true);
     setSettingsError('');
+    let preferenceSaved = false;
     try {
       let permission: NotificationPermissionResult = 'unsupported';
       if (notificationsEnabled) {
@@ -158,27 +167,44 @@ const ProfileScreen = ({ navigation }: any) => {
           setSettingsError('Hatırlatıcılar için telefon bildirim izni gerekli.');
           return;
         }
-      } else {
-        await notificationsService.cancelAllPickupReminders();
       }
 
       const updatedPreferences = await preferencesService.updatePreferences({ notificationsEnabled });
       setPreferences(updatedPreferences);
+      preferenceSaved = true;
 
       if (notificationsEnabled && permission === 'granted') {
+        let pushRegistered = false;
+        let pushRegistrationFailed = false;
+        try {
+          pushRegistered = await notificationsService.registerPushToken();
+        } catch (error) {
+          console.error('Sunucu bildirimi kaydedilemedi:', error);
+          pushRegistrationFailed = true;
+        }
         try {
           const activeReservations = await reservationService.getReservations('Aktif');
           for (const reservation of activeReservations.data) {
             await notificationsService.schedulePickupReminder(reservation);
           }
+          if (!pushRegistered && user.id) {
+            setSettingsError(pushRegistrationFailed
+              ? 'Sunucu bildirimi eşitlenemedi; bu cihazda yerel hatırlatıcı kullanılacak.'
+              : 'Sunucu bildirimi için EAS proje kimliği ve push kimlik bilgileri gerekir; bu cihazda yerel hatırlatıcı kullanılacak.');
+          }
         } catch (error) {
           console.error('Aktif rezervasyon hatırlatıcıları planlanamadı:', error);
           setSettingsError('Bildirimler açıldı ancak bazı rezervasyonlar için hatırlatıcı kurulamadı.');
         }
+      } else if (!notificationsEnabled) {
+        await notificationsService.cancelAllPickupReminders();
+        await notificationsService.unregisterPushToken();
       }
     } catch (error) {
       console.error('Bildirim tercihi güncellenemedi:', error);
-      setSettingsError('Bildirim tercihi güncellenemedi. Lütfen tekrar deneyin.');
+      setSettingsError(preferenceSaved
+        ? 'Bildirim tercihi kaydedildi ancak cihaz eşitlemesi tamamlanamadı.'
+        : 'Bildirim tercihi güncellenemedi. Lütfen tekrar deneyin.');
     } finally {
       setIsUpdatingNotifications(false);
     }
@@ -295,7 +321,7 @@ const ProfileScreen = ({ navigation }: any) => {
           <Text style={styles.preferenceNote}>
             {Platform.OS === 'web'
               ? 'Teslim hatırlatıcıları telefon uygulamasında çalışır.'
-              : 'Teslimden 30 dakika önce hatırlatma planlanır. Telefon bildirimi izni gerekir.'}
+              : 'Teslimden 30 dakika önce bildirim gönderilir. Sunucu bildirimi için EAS proje kimliği, push kimlik bilgileri ve telefon izni gerekir.'}
           </Text>
 
           <TouchableOpacity style={styles.menuItem} onPress={() => setActiveModal('privacy')}>

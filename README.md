@@ -51,6 +51,10 @@ development seed fixtures or test accounts.
    the two generated values into `DB_PASSWORD` and `AUTH_SECRET`. Do not reuse
    either value or commit this file. `EXPO_PUBLIC_GOOGLE_MAPS_API_KEY` is
    optional; without it, the web map displays a missing-key message.
+   Set `EXPO_PUBLIC_EAS_PROJECT_ID` to the EAS project ID and configure push
+   credentials in EAS to enable server pickup notifications; without them,
+   native apps continue using local reminders. `EXPO_ACCESS_TOKEN` is optional
+   and can be set to authenticate requests to Expo's push service.
 4. Start the production stack:
 
    ```sh
@@ -92,6 +96,11 @@ with `EXPO_PUBLIC_GOOGLE_MAPS_API_KEY=your-key` to enable it locally. Enable the
 Maps JavaScript API in Google Cloud and restrict the key to your development
 and production website referrers. This key is included in the web bundle, so
 never commit an unrestricted key or put a server-side key here.
+
+Native server push notifications use `EXPO_PUBLIC_EAS_PROJECT_ID` when building
+the app and require push credentials configured in EAS. Configure the project
+ID in `frontend/.env.local` for local development or in the production
+environment before building the mobile app.
 
 ## Frontend account and discovery behavior
 

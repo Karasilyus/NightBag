@@ -48,6 +48,8 @@ func (h *BagHandler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("PUT /api/v1/users/me", h.auth(h.updateMe))
 	mux.HandleFunc("GET /api/v1/users/me/preferences", h.auth(h.getUserPreferences))
 	mux.HandleFunc("PUT /api/v1/users/me/preferences", h.auth(h.updateUserPreferences))
+	mux.HandleFunc("POST /api/v1/users/me/push-token", h.auth(h.registerPushToken))
+	mux.HandleFunc("DELETE /api/v1/users/me/push-token", h.auth(h.removePushToken))
 	mux.HandleFunc("POST /api/v1/listings/{id}/reserve", h.auth(h.reserve))
 	mux.HandleFunc("GET /api/v1/reservations", h.auth(h.listReservations))
 	mux.HandleFunc("POST /api/v1/reservations/{id}/cancel", h.auth(h.cancelReservation))
@@ -231,6 +233,35 @@ func (h *BagHandler) cancelReservation(w http.ResponseWriter, r *http.Request, u
 		return
 	}
 	if err := h.paymentSvc.CancelReservation(r.Context(), userID, id, clientIP(r)); err != nil {
+		writeError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *BagHandler) registerPushToken(w http.ResponseWriter, r *http.Request, userID string) {
+	var req struct {
+		Token    string `json:"token"`
+		Platform string `json:"platform"`
+	}
+	if !decode(w, r, &req) {
+		return
+	}
+	if err := h.svc.RegisterPushToken(r.Context(), userID, req.Token, req.Platform); err != nil {
+		writeError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *BagHandler) removePushToken(w http.ResponseWriter, r *http.Request, userID string) {
+	var req struct {
+		Token string `json:"token"`
+	}
+	if !decode(w, r, &req) {
+		return
+	}
+	if err := h.svc.RemovePushToken(r.Context(), userID, req.Token); err != nil {
 		writeError(w, err)
 		return
 	}

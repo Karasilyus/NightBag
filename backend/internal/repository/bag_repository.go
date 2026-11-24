@@ -545,3 +545,22 @@ func (r *BagRepository) UpdateUserPreferences(ctx context.Context, userID string
 	}
 	return r.GetUserPreferences(ctx, userID)
 }
+
+func (r *BagRepository) RegisterPushToken(ctx context.Context, userID, token, platform string) error {
+	_, err := r.pool.Exec(ctx, `
+		INSERT INTO device_push_tokens (expo_push_token, user_id, platform)
+		VALUES ($1, $2, $3)
+		ON CONFLICT (expo_push_token) DO UPDATE
+		SET user_id = EXCLUDED.user_id,
+		    platform = EXCLUDED.platform,
+		    updated_at = now()`,
+		token, userID, platform)
+	return err
+}
+
+func (r *BagRepository) RemovePushToken(ctx context.Context, userID, token string) error {
+	_, err := r.pool.Exec(ctx, `
+		DELETE FROM device_push_tokens WHERE user_id = $1 AND expo_push_token = $2`,
+		userID, token)
+	return err
+}

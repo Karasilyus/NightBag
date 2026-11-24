@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import { apiClient } from './api';
 import { favoritesService } from './favorites.service';
+import { notificationsService } from './notifications.service';
 import { preferencesService } from './preferences.service';
 
 type BusinessRegistration = {
@@ -138,6 +139,11 @@ export const authService = {
 
   logout: async () => {
     favoritesService.clearCache();
+    try {
+      await notificationsService.unregisterPushToken();
+    } catch (error) {
+      console.error('Push bildirimi kaydı kaldırılamadı:', error);
+    }
     try {
       await apiClient.post('/auth/logout');
     } finally {
