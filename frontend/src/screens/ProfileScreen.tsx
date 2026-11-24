@@ -1,11 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, Image, Modal, Pressable, Switch, Linking } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, Image, Modal, Pressable, Switch, Linking, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import theme from '../constants/theme';
 import { authService } from '../services/auth.service';
 import { favoritesService } from '../services/favorites.service';
 import { preferencesService, UserPreferences } from '../services/preferences.service';
 import { profileService } from '../services/profile.service';
+import { reservationService } from '../services/reservation.service';
+import { notificationsService } from '../services/notifications.service';
+import { NotificationPermissionResult } from '../services/notifications.types';
 import LegalDraftNotice from '../components/LegalDraftNotice';
 
 const PERSONALIZATION_CATEGORIES = ['Fırın', 'Kafe', 'Tatlı', 'Yemek'];
@@ -30,6 +33,7 @@ const ProfileScreen = ({ navigation }: any) => {
   const [activeModal, setActiveModal] = useState<'location' | 'personalization' | 'privacy' | 'help' | null>(null);
   const [supportError, setSupportError] = useState('');
   const [settingsError, setSettingsError] = useState('');
+  const [isUpdatingNotifications, setIsUpdatingNotifications] = useState(false);
   const canAccessBusinessPanel = user.role === 'business_owner'
     && Boolean(user.business_id)
     && Boolean(user.email.trim());
@@ -143,6 +147,43 @@ const ProfileScreen = ({ navigation }: any) => {
     }
   };
 
+  const updateNotificationPreference = async (notificationsEnabled: boolean) => {
+    setIsUpdatingNotifications(true);
+    setSettingsError('');
+    try {
+      let permission: NotificationPermissionResult = 'unsupported';
+      if (notificationsEnabled) {
+        permission = await notificationsService.requestPermission();
+        if (permission === 'denied') {
+          setSettingsError('Hatırlatıcılar için telefon bildirim izni gerekli.');
+          return;
+        }
+      } else {
+        await notificationsService.cancelAllPickupReminders();
+      }
+
+      const updatedPreferences = await preferencesService.updatePreferences({ notificationsEnabled });
+      setPreferences(updatedPreferences);
+
+      if (notificationsEnabled && permission === 'granted') {
+        try {
+          const activeReservations = await reservationService.getReservations('Aktif');
+          for (const reservation of activeReservations.data) {
+            await notificationsService.schedulePickupReminder(reservation);
+          }
+        } catch (error) {
+          console.error('Aktif rezervasyon hatırlatıcıları planlanamadı:', error);
+          setSettingsError('Bildirimler açıldı ancak bazı rezervasyonlar için hatırlatıcı kurulamadı.');
+        }
+      }
+    } catch (error) {
+      console.error('Bildirim tercihi güncellenemedi:', error);
+      setSettingsError('Bildirim tercihi güncellenemedi. Lütfen tekrar deneyin.');
+    } finally {
+      setIsUpdatingNotifications(false);
+    }
+  };
+
   const openSupportEmail = async () => {
     try {
       await Linking.openURL('mailto:?subject=NightBag%20destek');
@@ -243,21 +284,19 @@ const ProfileScreen = ({ navigation }: any) => {
               <Text style={styles.menuValue}>{preferences.notificationsEnabled ? 'Açık' : 'Kapalı'}</Text>
               <Switch
                 value={preferences.notificationsEnabled}
-                onValueChange={async (notificationsEnabled) => {
-                  try {
-                    setPreferences(await preferencesService.updatePreferences({ notificationsEnabled }));
-                  } catch (error) {
-                    console.error('Bildirim tercihi kaydedilemedi:', error);
-                    setSettingsError('Bildirim tercihi kaydedilemedi. Lütfen tekrar deneyin.');
-                  }
-                }}
+                onValueChange={updateNotificationPreference}
+                disabled={isUpdatingNotifications}
                 trackColor={{ false: theme.COLORS.border, true: theme.COLORS.tagBackground }}
                 thumbColor={preferences.notificationsEnabled ? theme.COLORS.primary : '#f4f3f4'}
                 accessibilityLabel="Bildirim tercihini değiştir"
               />
             </View>
           </View>
-          <Text style={styles.preferenceNote}>Bildirim tercihin hesabında saklanır.</Text>
+          <Text style={styles.preferenceNote}>
+            {Platform.OS === 'web'
+              ? 'Teslim hatırlatıcıları telefon uygulamasında çalışır.'
+              : 'Teslimden 30 dakika önce hatırlatma planlanır. Telefon bildirimi izni gerekir.'}
+          </Text>
 
           <TouchableOpacity style={styles.menuItem} onPress={() => setActiveModal('privacy')}>
             <View style={styles.menuLeft}>

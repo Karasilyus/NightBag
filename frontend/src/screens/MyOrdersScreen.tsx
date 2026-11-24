@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, Image, ActivityIndicator, Modal, Pressable, Platform, useWindowDimensions } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, Image, ActivityIndicator, Modal, Pressable, Platform, useWindowDimensions, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import theme from '../constants/theme';
 import { reservationService } from '../services/reservation.service';
+import { notificationsService } from '../services/notifications.service';
 
 const MyOrdersScreen = () => {
   const { width } = useWindowDimensions();
@@ -52,6 +53,15 @@ const MyOrdersScreen = () => {
       await reservationService.cancelReservation(reservationToCancel.id);
       setReservationToCancel(null);
       setRetryCount((count) => count + 1);
+      try {
+        await notificationsService.cancelPickupReminder(reservationToCancel.id);
+      } catch (error) {
+        console.error('İptal edilen rezervasyonun hatırlatıcısı kaldırılamadı:', error);
+        Alert.alert(
+          'Rezervasyon iptal edildi',
+          'Ancak cihazdaki teslim alma hatırlatıcısı kaldırılamadı.'
+        );
+      }
     } catch (error: any) {
       console.error('Rezervasyon iptal edilemedi:', error);
       setCancellationError(

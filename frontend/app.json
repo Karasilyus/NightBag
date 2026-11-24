@@ -23,6 +23,7 @@
     },
     "plugins": [
       "expo-font",
+      "expo-notifications",
       [
         "expo-image-picker",
         {

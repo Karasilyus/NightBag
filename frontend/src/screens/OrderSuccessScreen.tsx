@@ -1,10 +1,13 @@
-import React from 'react';
-import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, Image, Share, Alert } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, Image, Share, Alert, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import theme from '../constants/theme';
+import { notificationsService } from '../services/notifications.service';
+import { preferencesService } from '../services/preferences.service';
 
 const OrderSuccessScreen = ({ route, navigation }: any) => {
   const reservation = route?.params?.reservation;
+  const [reminderMessage, setReminderMessage] = useState('');
   const pickupCode = reservation?.code;
   const businessName = reservation?.businessName || 'İşletme bilgisi alınamadı';
   const bagTitle = reservation?.bagTitle || 'Çanta bilgisi alınamadı';
@@ -13,6 +16,47 @@ const OrderSuccessScreen = ({ route, navigation }: any) => {
   const quantity = reservation?.quantity;
   const price = reservation?.price;
   const imageUrl = reservation?.imageUrl || 'https://images.unsplash.com/photo-1509440159596-0249088772ff?q=80&w=1000&auto=format&fit=crop';
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    const scheduleReminder = async () => {
+      if (!reservation?.id) return;
+
+      try {
+        const preferences = await preferencesService.getPreferences();
+        if (!preferences.notificationsEnabled) {
+          if (!isCancelled) setReminderMessage('Bildirimler ayarlardan kapalı.');
+          return;
+        }
+
+        const permission = await notificationsService.requestPermission();
+        if (permission === 'unsupported') return;
+        if (permission === 'denied') {
+          if (!isCancelled) setReminderMessage('Hatırlatıcı için telefon bildirim izni gerekli.');
+          return;
+        }
+
+        const result = await notificationsService.schedulePickupReminder(reservation);
+        if (isCancelled) return;
+        if (result === 'scheduled') {
+          setReminderMessage('Teslim saatinden 30 dakika önce hatırlatacağız.');
+        } else if (result === 'too-late') {
+          setReminderMessage('Teslim saati yaklaştığı için hatırlatıcı planlanamadı.');
+        } else if (result === 'permission-denied') {
+          setReminderMessage('Hatırlatıcı planlanamadı. Telefon bildirim ayarlarını kontrol et.');
+        }
+      } catch (error) {
+        console.error('Teslim alma hatırlatıcısı planlanamadı:', error);
+        if (!isCancelled) setReminderMessage('Hatırlatıcı planlanamadı. Daha sonra ayarlardan tekrar deneyebilirsin.');
+      }
+    };
+
+    scheduleReminder();
+    return () => {
+      isCancelled = true;
+    };
+  }, [reservation]);
 
   const shareReservation = async () => {
     try {
@@ -57,7 +101,11 @@ const OrderSuccessScreen = ({ route, navigation }: any) => {
         </TouchableOpacity>
       </View>
 
-      <View style={styles.content}>
+      <ScrollView
+        style={styles.content}
+        contentContainerStyle={styles.contentContainer}
+        showsVerticalScrollIndicator={false}
+      >
         <Text style={styles.title}>Çantan seni bekliyor!</Text>
         <Text style={styles.subtitle}>{businessName} işletmesindeki çantan başarıyla ayrıldı.</Text>
 
@@ -95,6 +143,13 @@ const OrderSuccessScreen = ({ route, navigation }: any) => {
           </View>
         </View>
 
+        {reminderMessage ? (
+          <View style={styles.reminderNotice} accessibilityLiveRegion="polite">
+            <Ionicons name="notifications-outline" size={20} color={theme.COLORS.primary} />
+            <Text style={styles.reminderText}>{reminderMessage}</Text>
+          </View>
+        ) : null}
+
         {/* Adımlar */}
         <View style={styles.stepsContainer}>
           <View style={styles.step}>
@@ -121,7 +176,7 @@ const OrderSuccessScreen = ({ route, navigation }: any) => {
             </View>
           </View>
         </View>
-      </View>
+      </ScrollView>
 
       {/* Alt Butonlar */}
       <View style={styles.bottomBar}>
@@ -161,6 +216,8 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
+  },
+  contentContainer: {
     padding: theme.SIZES.l,
     alignItems: 'center',
   },
@@ -260,6 +317,21 @@ const styles = StyleSheet.create({
   codeHint: {
     ...theme.FONTS.caption,
     color: theme.COLORS.textSecondary,
+  },
+  reminderNotice: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.SIZES.s,
+    padding: theme.SIZES.m,
+    marginBottom: theme.SIZES.l,
+    backgroundColor: theme.COLORS.tagBackground,
+    borderRadius: theme.SIZES.radius,
+  },
+  reminderText: {
+    ...theme.FONTS.body2,
+    flex: 1,
+    color: theme.COLORS.primary,
   },
   stepsContainer: {
     width: '100%',

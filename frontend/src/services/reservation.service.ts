@@ -8,6 +8,8 @@ const mapReservation = (r: any) => ({
   businessAddress: r.business_address,
   bagTitle: r.title,
   date: r.pickup_date,
+  pickupDate: r.pickup_date,
+  pickupStart: r.pickup_start,
   timeInfo: `${r.pickup_start}-${r.pickup_end}`,
   price: r.total_price,
   quantity: r.quantity,
