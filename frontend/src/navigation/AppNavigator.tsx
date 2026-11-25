@@ -1,9 +1,16 @@
-import React from 'react';
-import { NavigationContainer } from '@react-navigation/native';
+import React, { useEffect, useRef } from 'react';
+import { createNavigationContainerRef, NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
+import * as Notifications from 'expo-notifications';
+import { Platform } from 'react-native';
 import { COLORS } from '../constants/theme';
+
+type BagDetailRouteParams = {
+  bag?: Record<string, unknown>;
+  listingId?: string;
+};
 
 export type RootStackParamList = {
   Welcome: undefined;
@@ -19,7 +26,7 @@ export type RootStackParamList = {
   BusinessFlow: undefined;
   EditProfile: { userId: string; fullName: string; email: string };
   BusinessProfile: { businessId?: string; businessName?: string };
-  BagDetails: undefined;
+  BagDetails: BagDetailRouteParams | undefined;
   ReservationReview: undefined;
   ReservationConfirmed: undefined;
 };
@@ -39,6 +46,7 @@ export type BusinessTabParamList = {
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const MainTab = createBottomTabNavigator<MainTabParamList>();
 const BusinessTab = createBottomTabNavigator<BusinessTabParamList>();
+const navigationRef = createNavigationContainerRef<RootStackParamList>();
 
 const DummyScreen = () => null;
 import WelcomeScreen from '../screens/WelcomeScreen';
@@ -104,8 +112,38 @@ function BusinessTabNavigator() {
 }
 
 export default function AppNavigator() {
+  const pendingListingId = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (Platform.OS === 'web') return;
+
+    const openListing = (listingId: unknown) => {
+      if (typeof listingId !== 'string' || !listingId) return;
+      if (!navigationRef.isReady()) {
+        pendingListingId.current = listingId;
+        return;
+      }
+      navigationRef.navigate('BagDetails', { listingId });
+    };
+
+    const lastResponse = Notifications.getLastNotificationResponse();
+    openListing(lastResponse?.notification.request.content.data?.listingId);
+    if (lastResponse) Notifications.clearLastNotificationResponse();
+
+    const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
+      openListing(response.notification.request.content.data?.listingId);
+    });
+    return () => subscription.remove();
+  }, []);
+
+  const handleNavigationReady = () => {
+    if (!pendingListingId.current) return;
+    navigationRef.navigate('BagDetails', { listingId: pendingListingId.current });
+    pendingListingId.current = null;
+  };
+
   return (
-    <NavigationContainer>
+    <NavigationContainer ref={navigationRef} onReady={handleNavigationReady}>
       <Stack.Navigator
         screenOptions={{
           headerShown: false,

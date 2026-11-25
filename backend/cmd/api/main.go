@@ -137,7 +137,7 @@ func main() {
 	authSvc := services.NewAuthService(repo, authSecret)
 	paymentService := services.NewPaymentService(paymentRepo)
 	notificationDispatcher := services.NewNotificationDispatcher(pool, getenv("EXPO_ACCESS_TOKEN", ""))
-	bagHandler := handlers.NewBagHandler(svc, authSvc, paymentService)
+	bagHandler := handlers.NewBagHandler(svc, authSvc, paymentService, notificationDispatcher)
 	paymentHandler := handlers.NewPaymentHandler(paymentService, authSvc)
 	go notificationDispatcher.Run(ctx)
 

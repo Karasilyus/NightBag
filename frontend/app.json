@@ -32,6 +32,13 @@
           "microphonePermission": false
         }
       ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "NightBag, teslim kodlarını okutmak için kamera erişimine izin verir.",
+          "microphonePermission": false
+        }
+      ],
       "expo-web-browser"
     ]
   }

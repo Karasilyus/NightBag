@@ -14,6 +14,7 @@
     "@zxcvbn-ts/language-en": "^4.1.1",
     "axios": "^1.20.0",
     "expo": "~57.0.27",
+    "expo-camera": "~57.0.6",
     "expo-crypto": "~57.0.4",
     "expo-font": "~57.0.4",
     "expo-image-picker": "~57.0.21",
@@ -26,8 +27,10 @@
     "react-native": "0.86.3",
     "react-native-gesture-handler": "~2.32.0",
     "react-native-maps": "^1.29.11",
+    "react-native-qrcode-svg": "^6.3.55",
     "react-native-safe-area-context": "~5.7.0",
     "react-native-screens": "~4.26.0",
+    "react-native-svg": "15.15.4",
     "react-native-web": "^0.21.2"
   },
   "devDependencies": {

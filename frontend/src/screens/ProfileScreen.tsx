@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, Ima
 import { Ionicons } from '@expo/vector-icons';
 import theme from '../constants/theme';
 import { authService } from '../services/auth.service';
-import { favoritesService } from '../services/favorites.service';
+import { FavoriteBusiness, favoritesService } from '../services/favorites.service';
 import { preferencesService, UserPreferences } from '../services/preferences.service';
 import { profileService } from '../services/profile.service';
 import { reservationService } from '../services/reservation.service';
@@ -22,7 +22,7 @@ const ProfileScreen = ({ navigation }: any) => {
     business_id: '',
     profilePhone: '',
     profileStats: { savedBags: 0, moneySaved: 0 },
-    savedBusinesses: [] as any[]
+    savedBusinesses: [] as FavoriteBusiness[]
   });
   const [preferences, setPreferences] = useState<UserPreferences>({
     searchRadiusKm: 5,
@@ -33,13 +33,13 @@ const ProfileScreen = ({ navigation }: any) => {
   const [activeModal, setActiveModal] = useState<'location' | 'personalization' | 'privacy' | 'help' | null>(null);
   const [supportError, setSupportError] = useState('');
   const [settingsError, setSettingsError] = useState('');
+  const [arePreferencesLoaded, setArePreferencesLoaded] = useState(false);
   const [isUpdatingNotifications, setIsUpdatingNotifications] = useState(false);
+  const [updatingFavoriteBusinessId, setUpdatingFavoriteBusinessId] = useState<string | null>(null);
   const canAccessBusinessPanel = user.role === 'business_owner'
     && Boolean(user.business_id)
     && Boolean(user.email.trim());
-  const favoritePlaces = Array.from(new Map(
-    user.savedBusinesses.map((savedBag) => [savedBag.businessId, savedBag])
-  ).values());
+  const favoritePlaces = user.savedBusinesses;
 
   useEffect(() => {
     const loadUser = async () => {
@@ -47,14 +47,17 @@ const ProfileScreen = ({ navigation }: any) => {
         authService.getCurrentUser(),
         preferencesService.getPreferences(),
         authService.getCurrentUserStats(),
-        favoritesService.getFavorites(),
+        favoritesService.getFavoriteBusinesses(),
       ]);
       const [currentUserResult, preferencesResult, statsResult, favoritesResult] = results;
       const failures = results.filter((result) => result.status === 'rejected').length;
       let profileDetails: { fullName: string; phone: string } | null = null;
       let profileDetailsError = false;
 
-      if (preferencesResult.status === 'fulfilled') setPreferences(preferencesResult.value);
+      if (preferencesResult.status === 'fulfilled') {
+        setPreferences(preferencesResult.value);
+        setArePreferencesLoaded(true);
+      }
       if (currentUserResult.status === 'fulfilled' && currentUserResult.value) {
         if (
           preferencesResult.status === 'fulfilled'
@@ -80,14 +83,7 @@ const ProfileScreen = ({ navigation }: any) => {
           profilePhone: profileDetails?.phone || '',
           profileStats: statsResult.status === 'fulfilled' ? statsResult.value : previous.profileStats,
           savedBusinesses: favoritesResult.status === 'fulfilled'
-            ? favoritesResult.value.map((listing) => ({
-                id: listing.id,
-                businessId: listing.businessId,
-                name: listing.businessName,
-                type: listing.bagType,
-                distance: listing.distance,
-                imageUrl: listing.imageUrl,
-              }))
+            ? favoritesResult.value
             : previous.savedBusinesses,
         }));
       }
@@ -233,6 +229,53 @@ const ProfileScreen = ({ navigation }: any) => {
     }
   };
 
+  const updateFavoriteBusinessNotifications = async (businessId: string, enabled: boolean) => {
+    if (!arePreferencesLoaded) {
+      setSettingsError('Bildirim tercihleri yüklenene kadar lütfen bekle.');
+      return;
+    }
+    if (enabled && !preferences.notificationsEnabled) {
+      setSettingsError('Favori işletme bildirimleri için önce genel bildirimleri aç.');
+      return;
+    }
+    if (enabled && Platform.OS === 'web') {
+      setSettingsError('Favori işletme bildirimleri iOS ve Android uygulamasında kullanılabilir.');
+      return;
+    }
+
+    setUpdatingFavoriteBusinessId(businessId);
+    setSettingsError('');
+    try {
+      if (enabled) {
+        const permission = await notificationsService.requestPermission();
+        if (permission !== 'granted') {
+          setSettingsError('Favori işletme bildirimleri için telefon bildirim izni gerekli.');
+          return;
+        }
+        const registered = await notificationsService.registerPushToken();
+        if (!registered) {
+          setSettingsError('Push kaydı tamamlanamadı. Oturum, EAS proje kimliği ve bildirim yapılandırmasını kontrol et.');
+          return;
+        }
+      }
+
+      await favoritesService.setBusinessNotifications(businessId, enabled);
+      setUser((previous) => ({
+        ...previous,
+        savedBusinesses: previous.savedBusinesses.map((business) => (
+          business.businessId === businessId
+            ? { ...business, notificationsEnabled: enabled }
+            : business
+        )),
+      }));
+    } catch (error) {
+      console.error('Favori işletme bildirimi güncellenemedi:', error);
+      setSettingsError('Favori işletme bildirimi kaydedilemedi. Lütfen tekrar deneyin.');
+    } finally {
+      setUpdatingFavoriteBusinessId(null);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
@@ -311,7 +354,7 @@ const ProfileScreen = ({ navigation }: any) => {
               <Switch
                 value={preferences.notificationsEnabled}
                 onValueChange={updateNotificationPreference}
-                disabled={isUpdatingNotifications}
+                disabled={isUpdatingNotifications || !arePreferencesLoaded}
                 trackColor={{ false: theme.COLORS.border, true: theme.COLORS.tagBackground }}
                 thumbColor={preferences.notificationsEnabled ? theme.COLORS.primary : '#f4f3f4'}
                 accessibilityLabel="Bildirim tercihini değiştir"
@@ -368,18 +411,50 @@ const ProfileScreen = ({ navigation }: any) => {
           <Text style={styles.sectionTitle}>Favori mekanların</Text>
           <Text style={styles.seeAllText}>{favoritePlaces.length} mekan</Text>
           </View>
-          <Text style={styles.preferenceNote}>Favori mekanların hesabına kaydedilir. Bir işletmenin aktif çantaları burada gösterilir.</Text>
+          <Text style={styles.preferenceNote}>
+            {Platform.OS === 'web'
+              ? 'Yeni çanta bildirimleri iOS ve Android uygulamasında kullanılabilir.'
+              : preferences.notificationsEnabled
+                ? 'Yeni çanta uyarıları için cihaz bildirim izni ve sunucu push kaydı gerekir.'
+                : 'Favori işletme uyarılarını açmak için genel bildirimleri etkinleştir.'}
+          </Text>
           {favoritePlaces.map((place) => (
             <View key={place.businessId} style={styles.favCard}>
-              <Image source={{ uri: place.imageUrl }} style={styles.favImage} />
+              {place.imageUrl
+                ? <Image source={{ uri: place.imageUrl }} style={styles.favImage} />
+                : <View style={[styles.favImage, styles.favImagePlaceholder]}>
+                    <Ionicons name="storefront-outline" size={20} color={theme.COLORS.primary} />
+                  </View>}
               <View style={styles.favInfo}>
-                <Text style={styles.favName}>{place.name}</Text>
-                <Text style={styles.favDesc}>{place.type}</Text>
+                <Text style={styles.favName}>{place.businessName}</Text>
+                <View style={styles.favNotificationRow}>
+                  <Text style={styles.favDesc}>Yeni çanta bildirimi</Text>
+                  <Switch
+                    value={place.notificationsEnabled}
+                    onValueChange={(enabled) => updateFavoriteBusinessNotifications(place.businessId, enabled)}
+                    disabled={
+                      ((Platform.OS === 'web' || !preferences.notificationsEnabled)
+                        && !place.notificationsEnabled)
+                      || !arePreferencesLoaded
+                      || updatingFavoriteBusinessId !== null
+                    }
+                    trackColor={{ false: theme.COLORS.border, true: theme.COLORS.tagBackground }}
+                    thumbColor={place.notificationsEnabled ? theme.COLORS.primary : '#f4f3f4'}
+                    accessibilityLabel={`${place.businessName} yeni çanta bildirimleri`}
+                    accessibilityState={{
+                      checked: place.notificationsEnabled,
+                      disabled: ((Platform.OS === 'web' || !preferences.notificationsEnabled)
+                        && !place.notificationsEnabled)
+                        || !arePreferencesLoaded
+                        || updatingFavoriteBusinessId !== null,
+                    }}
+                  />
+                </View>
               </View>
               <TouchableOpacity
                 onPress={() => removeFavoriteBusiness(place.businessId)}
                 accessibilityRole="button"
-                accessibilityLabel={`${place.name} favorilerden çıkar`}
+                accessibilityLabel={`${place.businessName} favorilerden çıkar`}
               >
                 <Ionicons name="heart" size={22} color={theme.COLORS.primary} />
               </TouchableOpacity>
@@ -557,11 +632,13 @@ const styles = StyleSheet.create({
   radiusOptionTextSelected: { color: theme.COLORS.primary, fontWeight: '600' },
   supportError: { ...theme.FONTS.caption, color: theme.COLORS.error, marginBottom: theme.SIZES.s },
   settingsError: { ...theme.FONTS.caption, color: theme.COLORS.error, marginBottom: theme.SIZES.s },
-  favCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.COLORS.card, padding: theme.SIZES.m, borderRadius: theme.SIZES.radius, marginBottom: theme.SIZES.m, borderWidth: 1, borderColor: theme.COLORS.border },
+  favCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.COLORS.card, padding: theme.SIZES.m, borderRadius: theme.SIZES.radius, marginBottom: theme.SIZES.m, borderWidth: 1, borderColor: theme.COLORS.border, gap: theme.SIZES.s },
   favImage: { width: 48, height: 48, borderRadius: 24 },
-  favInfo: { flex: 1, marginLeft: theme.SIZES.m },
+  favImagePlaceholder: { alignItems: 'center', justifyContent: 'center', backgroundColor: theme.COLORS.tagBackground },
+  favInfo: { flex: 1, minWidth: 0 },
   favName: { ...theme.FONTS.body2, fontWeight: '600', color: theme.COLORS.text },
   favDesc: { ...theme.FONTS.caption, color: theme.COLORS.textSecondary },
+  favNotificationRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: theme.SIZES.xs, marginTop: 2 },
   businessSwitchBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.COLORS.tagBackground, padding: theme.SIZES.m, borderRadius: theme.SIZES.radius, marginTop: theme.SIZES.m, gap: theme.SIZES.s },
   businessSwitchText: { ...theme.FONTS.body2, fontWeight: '600', color: theme.COLORS.primary },
 });

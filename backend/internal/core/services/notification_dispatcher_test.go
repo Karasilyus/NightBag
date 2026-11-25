@@ -21,14 +21,16 @@ func TestSendPushAcceptsExpoSuccessTicket(t *testing.T) {
 				t.Fatalf("istek başlığı veya yöntemi beklenenden farklı: %s %s", req.Method, req.Header.Get("Authorization"))
 			}
 			var payload struct {
-				To   string            `json:"to"`
-				Body string            `json:"body"`
-				Data map[string]string `json:"data"`
+				To    string            `json:"to"`
+				Title string            `json:"title"`
+				Body  string            `json:"body"`
+				Data  map[string]string `json:"data"`
 			}
 			if err := json.NewDecoder(req.Body).Decode(&payload); err != nil {
 				t.Fatal(err)
 			}
-			if payload.To != "ExpoPushToken[abc123]" || payload.Body != "Teslim hatırlatması" ||
+			if payload.To != "ExpoPushToken[abc123]" || payload.Title != "Teslim saatin yaklaşıyor" ||
+				payload.Body != "Teslim hatırlatması" ||
 				payload.Data["reservationId"] != "reservation-id" {
 				t.Fatalf("beklenmeyen push içeriği: %+v", payload)
 			}
@@ -42,7 +44,11 @@ func TestSendPushAcceptsExpoSuccessTicket(t *testing.T) {
 	}
 
 	delivered, invalidToken, err := dispatcher.sendPush(
-		t.Context(), "ExpoPushToken[abc123]", "Teslim hatırlatması", "reservation-id",
+		t.Context(),
+		"ExpoPushToken[abc123]",
+		"Teslim saatin yaklaşıyor",
+		"Teslim hatırlatması",
+		map[string]string{"reservationId": "reservation-id"},
 	)
 	if err != nil || !delivered || invalidToken {
 		t.Fatalf("başarılı Expo bileti bekleniyordu; delivered=%t invalidToken=%t err=%v", delivered, invalidToken, err)
@@ -61,9 +67,48 @@ func TestSendPushIdentifiesUnregisteredDevice(t *testing.T) {
 	}
 
 	delivered, invalidToken, err := dispatcher.sendPush(
-		t.Context(), "ExpoPushToken[abc123]", "Teslim hatırlatması", "reservation-id",
+		t.Context(),
+		"ExpoPushToken[abc123]",
+		"Teslim saatin yaklaşıyor",
+		"Teslim hatırlatması",
+		map[string]string{"reservationId": "reservation-id"},
 	)
 	if err != nil || delivered || !invalidToken {
 		t.Fatalf("kayıtsız cihaz bileti bekleniyordu; delivered=%t invalidToken=%t err=%v", delivered, invalidToken, err)
+	}
+}
+
+func TestSendFavoriteListingPushIncludesNavigationData(t *testing.T) {
+	dispatcher := &NotificationDispatcher{
+		client: &http.Client{Transport: roundTripperFunc(func(req *http.Request) (*http.Response, error) {
+			var payload struct {
+				Title string            `json:"title"`
+				Data  map[string]string `json:"data"`
+			}
+			if err := json.NewDecoder(req.Body).Decode(&payload); err != nil {
+				t.Fatal(err)
+			}
+			if payload.Title != "Favori işletmenden yeni çanta" ||
+				payload.Data["type"] != "favorite_listing" ||
+				payload.Data["listingId"] != "listing-id" {
+				t.Fatalf("beklenmeyen favori ilan push içeriği: %+v", payload)
+			}
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(strings.NewReader(`{"data":{"status":"ok"}}`)),
+				Header:     make(http.Header),
+			}, nil
+		})},
+	}
+
+	delivered, invalidToken, err := dispatcher.sendPush(
+		t.Context(),
+		"ExpoPushToken[abc123]",
+		"Favori işletmenden yeni çanta",
+		"Fırın yeni bir Sürpriz Çanta yayınladı: Günün seçkisi",
+		map[string]string{"type": "favorite_listing", "listingId": "listing-id"},
+	)
+	if err != nil || !delivered || invalidToken {
+		t.Fatalf("başarılı favori ilan push bileti bekleniyordu; delivered=%t invalidToken=%t err=%v", delivered, invalidToken, err)
 	}
 }

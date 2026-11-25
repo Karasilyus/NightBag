@@ -53,6 +53,13 @@ type Listing struct {
 	ReviewCount       int         `json:"review_count"`
 }
 
+type FavoriteBusiness struct {
+	BusinessID          string  `json:"business_id"`
+	BusinessName        string  `json:"business_name"`
+	PhotoURL            *string `json:"photo_url,omitempty"`
+	NotificationsEnabled bool    `json:"notifications_enabled"`
+}
+
 type NearbyFilter struct {
 	Lon      float64
 	Lat      float64

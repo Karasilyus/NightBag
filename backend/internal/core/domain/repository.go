@@ -16,6 +16,8 @@ type BagRepository interface {
 	AddFavorite(ctx context.Context, userID, businessID string) error
 	RemoveFavorite(ctx context.Context, userID, businessID string) error
 	ListFavoriteListings(ctx context.Context, userID string) ([]Listing, error)
+	ListFavoriteBusinesses(ctx context.Context, userID string) ([]FavoriteBusiness, error)
+	UpdateFavoriteBusinessNotifications(ctx context.Context, userID, businessID string, enabled bool) error
 	GetUserPreferences(ctx context.Context, userID string) (*UserPreferences, error)
 	UpdateUserPreferences(ctx context.Context, userID string, preferences UserPreferences) (*UserPreferences, error)
 	RegisterPushToken(ctx context.Context, userID, token, platform string) error

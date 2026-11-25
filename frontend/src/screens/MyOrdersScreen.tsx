@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import theme from '../constants/theme';
 import { reservationService } from '../services/reservation.service';
 import { notificationsService } from '../services/notifications.service';
+import PickupCodeQrCard from '../components/PickupCodeQrCard';
 
 const MyOrdersScreen = () => {
   const { width } = useWindowDimensions();
@@ -182,8 +183,7 @@ const MyOrdersScreen = () => {
         <Pressable style={styles.modalBackdrop} onPress={() => setSelectedCode(null)}>
           <Pressable style={styles.codeModal} onPress={(event) => event.stopPropagation()}>
             <Text style={styles.modalTitle}>Teslim alma kodun</Text>
-            <Text style={styles.modalCode}>{selectedCode}</Text>
-            <Text style={styles.modalHint}>Bu kodu teslim alırken işletme görevlisine göster.</Text>
+            {selectedCode ? <PickupCodeQrCard code={selectedCode} size={160} /> : null}
             <TouchableOpacity style={styles.modalCloseButton} onPress={() => setSelectedCode(null)}>
               <Text style={styles.modalCloseText}>Kapat</Text>
             </TouchableOpacity>
@@ -246,7 +246,6 @@ const styles = StyleSheet.create({
   retryButtonText: { ...theme.FONTS.body2, color: theme.COLORS.card, fontWeight: '600' },
   codeModal: { alignSelf: 'center', width: '100%', maxWidth: 400, alignItems: 'center', padding: theme.SIZES.l, backgroundColor: theme.COLORS.card, borderRadius: theme.SIZES.cardRadius },
   modalTitle: { ...theme.FONTS.h3, color: theme.COLORS.text, marginBottom: theme.SIZES.m },
-  modalCode: { ...theme.FONTS.h1, color: theme.COLORS.primary, letterSpacing: 2, marginBottom: theme.SIZES.s },
   modalHint: { ...theme.FONTS.body2, color: theme.COLORS.textSecondary, textAlign: 'center', marginBottom: theme.SIZES.m },
   modalCloseButton: { minWidth: 120, padding: theme.SIZES.s, alignItems: 'center', backgroundColor: theme.COLORS.primary, borderRadius: theme.SIZES.buttonRadius },
   modalCloseText: { ...theme.FONTS.body2, fontWeight: '600', color: theme.COLORS.card },

@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, Ima
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import theme from '../constants/theme';
 import { businessService } from '../services/business.service';
+import PickupCodeScannerModal from '../components/PickupCodeScannerModal';
 
 const BusinessDashboardScreen = ({ navigation }: any) => {
   const [data, setData] = useState<any>(null);
@@ -10,6 +11,7 @@ const BusinessDashboardScreen = ({ navigation }: any) => {
   const [loadError, setLoadError] = useState('');
   const [searchCode, setSearchCode] = useState('');
   const [isVerifying, setIsVerifying] = useState(false);
+  const [isScannerVisible, setIsScannerVisible] = useState(false);
 
   const fetchData = async () => {
     setIsLoading(true);
@@ -202,6 +204,15 @@ const BusinessDashboardScreen = ({ navigation }: any) => {
             )}
           </TouchableOpacity>
         </View>
+        <TouchableOpacity
+          style={styles.scanButton}
+          onPress={() => setIsScannerVisible(true)}
+          disabled={isVerifying}
+          accessibilityRole="button"
+        >
+          <Ionicons name="qr-code-outline" size={18} color={theme.COLORS.primary} />
+          <Text style={styles.scanButtonText}>QR kodu okut</Text>
+        </TouchableOpacity>
 
         {/* Sipariş Listesi */}
         <View style={styles.orderList}>
@@ -259,6 +270,14 @@ const BusinessDashboardScreen = ({ navigation }: any) => {
         </TouchableOpacity>
 
       </ScrollView>
+      <PickupCodeScannerModal
+        visible={isScannerVisible}
+        onClose={() => setIsScannerVisible(false)}
+        onCodeScanned={(code) => {
+          setIsScannerVisible(false);
+          void handleVerifyCode(code);
+        }}
+      />
     </SafeAreaView>
   );
 };
@@ -310,6 +329,8 @@ const styles = StyleSheet.create({
   searchInput: { flex: 1, backgroundColor: theme.COLORS.card, borderRadius: theme.SIZES.radius, paddingHorizontal: theme.SIZES.m, height: 48, borderWidth: 1, borderColor: theme.COLORS.border, ...theme.FONTS.body2 },
   searchBtn: { backgroundColor: theme.COLORS.primary, justifyContent: 'center', alignItems: 'center', paddingHorizontal: theme.SIZES.l, borderRadius: theme.SIZES.radius, minWidth: 90 },
   searchBtnText: { ...theme.FONTS.body2, fontWeight: '600', color: theme.COLORS.card },
+  scanButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: theme.SIZES.s, minHeight: 44, marginTop: -theme.SIZES.s, marginBottom: theme.SIZES.l, borderWidth: 1, borderColor: theme.COLORS.border, borderRadius: theme.SIZES.radius, backgroundColor: theme.COLORS.card },
+  scanButtonText: { ...theme.FONTS.body2, fontWeight: '600', color: theme.COLORS.primary },
   orderList: { backgroundColor: theme.COLORS.card, borderRadius: theme.SIZES.radius, borderWidth: 1, borderColor: theme.COLORS.border, padding: theme.SIZES.m },
   orderItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: theme.SIZES.m, borderBottomWidth: 1, borderBottomColor: theme.COLORS.background },
   orderName: { ...theme.FONTS.body2, fontWeight: '600', color: theme.COLORS.text, marginBottom: 4 },

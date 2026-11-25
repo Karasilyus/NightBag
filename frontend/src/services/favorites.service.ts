@@ -15,8 +15,17 @@ export interface FavoriteBusinessListing {
   coordinate: { latitude: number; longitude: number };
 }
 
+export interface FavoriteBusiness {
+  businessId: string;
+  businessName: string;
+  imageUrl: string;
+  notificationsEnabled: boolean;
+}
+
 let favoriteListingsCache: FavoriteBusinessListing[] | null = null;
 let favoriteListingsRequest: Promise<FavoriteBusinessListing[]> | null = null;
+let favoriteBusinessesCache: FavoriteBusiness[] | null = null;
+let favoriteBusinessesRequest: Promise<FavoriteBusiness[]> | null = null;
 let favoritesVersion = 0;
 const favoriteListeners = new Set<(businessId: string, isFavorite: boolean) => void>();
 
@@ -39,20 +48,60 @@ const loadFavorites = async (): Promise<FavoriteBusinessListing[]> => {
   return favoriteListingsRequest;
 };
 
+const loadFavoriteBusinesses = async (): Promise<FavoriteBusiness[]> => {
+  if (favoriteBusinessesCache) return favoriteBusinessesCache;
+  if (!favoriteBusinessesRequest) {
+    const requestVersion = favoritesVersion;
+    favoriteBusinessesRequest = (async () => {
+      const response = await apiClient.get('/favorites/businesses');
+      if (!Array.isArray(response.data)) {
+        throw new Error('Favori işletme yanıtı geçersiz.');
+      }
+      const businesses = response.data.map((item) => {
+        if (
+          !item
+          || typeof item.business_id !== 'string'
+          || typeof item.business_name !== 'string'
+          || typeof item.notifications_enabled !== 'boolean'
+        ) {
+          throw new Error('Favori işletme bilgisi geçersiz.');
+        }
+        return {
+          businessId: item.business_id,
+          businessName: item.business_name,
+          imageUrl: typeof item.photo_url === 'string' ? item.photo_url : '',
+          notificationsEnabled: item.notifications_enabled,
+        };
+      });
+      if (requestVersion === favoritesVersion) favoriteBusinessesCache = businesses;
+      return businesses;
+    })().finally(() => {
+      if (requestVersion === favoritesVersion) favoriteBusinessesRequest = null;
+    });
+  }
+  return favoriteBusinessesRequest;
+};
+
 export const favoritesService = {
   clearCache: () => {
     favoritesVersion += 1;
     favoriteListingsCache = null;
     favoriteListingsRequest = null;
+    favoriteBusinessesCache = null;
+    favoriteBusinessesRequest = null;
   },
 
   getFavorites: async (): Promise<FavoriteBusinessListing[]> => {
     return loadFavorites();
   },
 
+  getFavoriteBusinesses: async (): Promise<FavoriteBusiness[]> => {
+    return loadFavoriteBusinesses();
+  },
+
   isBusinessFavorited: async (businessId: string): Promise<boolean> => {
     if (!businessId) return false;
-    const favorites = await loadFavorites();
+    const favorites = await loadFavoriteBusinesses();
     return favorites.some((favorite) => favorite.businessId === businessId);
   },
 
@@ -72,5 +121,12 @@ export const favoritesService = {
 
     favoritesService.clearCache();
     favoriteListeners.forEach((listener) => listener(businessId, !isFavorite));
+  },
+
+  setBusinessNotifications: async (businessId: string, enabled: boolean): Promise<void> => {
+    if (!businessId) throw new Error('İşletme kimliği bulunamadı.');
+
+    await apiClient.put(`/favorites/${businessId}/notifications`, { enabled });
+    favoritesService.clearCache();
   },
 };

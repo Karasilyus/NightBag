@@ -13,22 +13,29 @@ import (
 )
 
 type BagHandler struct {
-	svc           *services.BagService
-	authSvc       *services.AuthService
-	paymentSvc    *services.PaymentService
-	loginLim      *loginLimiter
-	authIPLim     *loginLimiter
-	registerIPLim *loginLimiter
+	svc                    *services.BagService
+	authSvc                *services.AuthService
+	paymentSvc             *services.PaymentService
+	notificationDispatcher *services.NotificationDispatcher
+	loginLim               *loginLimiter
+	authIPLim              *loginLimiter
+	registerIPLim          *loginLimiter
 }
 
-func NewBagHandler(svc *services.BagService, authSvc *services.AuthService, paymentSvc *services.PaymentService) *BagHandler {
+func NewBagHandler(
+	svc *services.BagService,
+	authSvc *services.AuthService,
+	paymentSvc *services.PaymentService,
+	notificationDispatcher *services.NotificationDispatcher,
+) *BagHandler {
 	return &BagHandler{
-		svc:           svc,
-		authSvc:       authSvc,
-		paymentSvc:    paymentSvc,
-		loginLim:      newDefaultLoginLimiter(),
-		authIPLim:     newLoginLimiter(60, 15*time.Minute),
-		registerIPLim: newLoginLimiter(5, time.Hour),
+		svc:                    svc,
+		authSvc:                authSvc,
+		paymentSvc:             paymentSvc,
+		notificationDispatcher: notificationDispatcher,
+		loginLim:               newDefaultLoginLimiter(),
+		authIPLim:              newLoginLimiter(60, 15*time.Minute),
+		registerIPLim:          newLoginLimiter(5, time.Hour),
 	}
 }
 
@@ -56,9 +63,11 @@ func (h *BagHandler) Register(mux *http.ServeMux) {
 
 	mux.HandleFunc("POST /api/v1/favorites/{businessID}", h.auth(h.addFavorite))
 	mux.HandleFunc("DELETE /api/v1/favorites/{businessID}", h.auth(h.removeFavorite))
+	mux.HandleFunc("PUT /api/v1/favorites/{businessID}/notifications", h.auth(h.updateFavoriteBusinessNotifications))
 
 	mux.HandleFunc("GET /api/v1/users/me", h.auth(h.getMe))
 	mux.HandleFunc("GET /api/v1/favorites", h.auth(h.listFavorites))
+	mux.HandleFunc("GET /api/v1/favorites/businesses", h.auth(h.listFavoriteBusinesses))
 
 	mux.HandleFunc("POST /api/v1/business/{businessID}/listings", h.auth(h.createListing))
 	mux.HandleFunc("GET /api/v1/business/overview", h.auth(h.overview))
@@ -315,6 +324,9 @@ func (h *BagHandler) createListing(w http.ResponseWriter, r *http.Request, owner
 		writeError(w, err)
 		return
 	}
+	if h.notificationDispatcher != nil {
+		h.notificationDispatcher.ListingPublished(l.ID)
+	}
 	writeJSON(w, http.StatusCreated, l)
 }
 
@@ -369,6 +381,37 @@ func (h *BagHandler) removeFavorite(w http.ResponseWriter, r *http.Request, user
 		return
 	}
 	if err := h.svc.RemoveFavorite(r.Context(), userID, businessID); err != nil {
+		writeError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *BagHandler) listFavoriteBusinesses(w http.ResponseWriter, r *http.Request, userID string) {
+	items, err := h.svc.ListFavoriteBusinesses(r.Context(), userID)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, items)
+}
+
+func (h *BagHandler) updateFavoriteBusinessNotifications(w http.ResponseWriter, r *http.Request, userID string) {
+	businessID, ok := pathUUID(w, r, "businessID")
+	if !ok {
+		return
+	}
+	var req struct {
+		Enabled *bool `json:"enabled"`
+	}
+	if !decode(w, r, &req) {
+		return
+	}
+	if req.Enabled == nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "enabled alanı zorunlu"})
+		return
+	}
+	if err := h.svc.UpdateFavoriteBusinessNotifications(r.Context(), userID, businessID, *req.Enabled); err != nil {
 		writeError(w, err)
 		return
 	}

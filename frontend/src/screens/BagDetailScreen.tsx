@@ -3,9 +3,73 @@ import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, SafeAreaVi
 import { Ionicons } from '@expo/vector-icons';
 import theme from '../constants/theme';
 import { favoritesService } from '../services/favorites.service';
+import { bagService } from '../services/bag.service';
 
 const BagDetailScreen = ({ route, navigation }: any) => {
   const bag = route.params?.bag;
+  const listingId = route.params?.listingId;
+  if (bag) return <BagDetailContent bag={bag} navigation={navigation} />;
+  if (listingId) return <NotificationBagDetail key={listingId} listingId={listingId} navigation={navigation} />;
+
+  return (
+    <SafeAreaView style={[styles.container, styles.missingBagContainer]}>
+      <Ionicons name="alert-circle-outline" size={44} color={theme.COLORS.error} />
+      <Text style={styles.missingBagTitle}>Çanta bilgisi bulunamadı</Text>
+      <TouchableOpacity style={styles.missingBagButton} onPress={() => navigation.goBack()} accessibilityRole="button">
+        <Text style={styles.missingBagButtonText}>Geri dön</Text>
+      </TouchableOpacity>
+    </SafeAreaView>
+  );
+};
+
+const NotificationBagDetail = ({ listingId, navigation }: any) => {
+  const [bag, setBag] = useState<any>(null);
+  const [loadError, setLoadError] = useState('');
+  const [retryCount, setRetryCount] = useState(0);
+
+  useEffect(() => {
+    let isCancelled = false;
+    bagService.getBagDetail(listingId)
+      .then((listing) => {
+        if (!isCancelled) setBag(listing);
+      })
+      .catch((error) => {
+        console.error('Push bildirimindeki ilan yüklenemedi:', error);
+        if (!isCancelled) setLoadError('İlan bilgisi yüklenemedi. Bağlantını kontrol edip tekrar dene.');
+      });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [listingId, retryCount]);
+
+  if (bag) return <BagDetailContent bag={bag} navigation={navigation} />;
+  if (loadError) {
+    return (
+      <SafeAreaView style={[styles.container, styles.missingBagContainer]}>
+        <Ionicons name="alert-circle-outline" size={44} color={theme.COLORS.error} />
+        <Text style={styles.missingBagTitle}>{loadError}</Text>
+        <TouchableOpacity
+          style={styles.missingBagButton}
+          onPress={() => {
+            setLoadError('');
+            setRetryCount((count) => count + 1);
+          }}
+          accessibilityRole="button"
+        >
+          <Text style={styles.missingBagButtonText}>Tekrar dene</Text>
+        </TouchableOpacity>
+      </SafeAreaView>
+    );
+  }
+  return (
+    <SafeAreaView style={[styles.container, styles.missingBagContainer]}>
+      <Text style={styles.missingBagTitle}>Çanta bilgisi yükleniyor...</Text>
+    </SafeAreaView>
+  );
+};
+
+const BagDetailContent = ({ bag, navigation }: any) => {
   const contentTags: string[] = Array.isArray(bag?.contentTags)
     ? bag.contentTags.filter((tag: unknown): tag is string => typeof tag === 'string' && tag.trim().length > 0)
     : [];
@@ -54,18 +118,6 @@ const BagDetailScreen = ({ route, navigation }: any) => {
       Alert.alert('Yol tarifi açılamadı', 'Harita uygulaması açılamadı. Lütfen tekrar dene.');
     }
   };
-
-  if (!bag) {
-    return (
-      <SafeAreaView style={[styles.container, styles.missingBagContainer]}>
-        <Ionicons name="alert-circle-outline" size={44} color={theme.COLORS.error} />
-        <Text style={styles.missingBagTitle}>Çanta bilgisi bulunamadı</Text>
-        <TouchableOpacity style={styles.missingBagButton} onPress={() => navigation.goBack()} accessibilityRole="button">
-          <Text style={styles.missingBagButtonText}>Geri dön</Text>
-        </TouchableOpacity>
-      </SafeAreaView>
-    );
-  }
 
   return (
     <SafeAreaView style={styles.container}>

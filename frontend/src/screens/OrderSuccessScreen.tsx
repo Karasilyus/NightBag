@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import theme from '../constants/theme';
 import { notificationsService } from '../services/notifications.service';
 import { preferencesService } from '../services/preferences.service';
+import PickupCodeQrCard from '../components/PickupCodeQrCard';
 
 const OrderSuccessScreen = ({ route, navigation }: any) => {
   const reservation = route?.params?.reservation;
@@ -136,10 +137,7 @@ const OrderSuccessScreen = ({ route, navigation }: any) => {
 
           <View style={styles.codeContainer}>
             <Text style={styles.codeLabel}>TESLİM ALMA KODUN</Text>
-            <View style={styles.codeRow}>
-              <Text style={styles.codeText}>{pickupCode}</Text>
-            </View>
-            <Text style={styles.codeHint}>Bu kodu işletmedeki görevliye göster.</Text>
+            <PickupCodeQrCard code={pickupCode} size={160} />
           </View>
         </View>
 
@@ -163,7 +161,7 @@ const OrderSuccessScreen = ({ route, navigation }: any) => {
           <View style={styles.step}>
             <View style={styles.stepNumber}><Text style={styles.stepNumberText}>2</Text></View>
             <View style={styles.stepText}>
-              <Text style={styles.stepTitle}>Kodunu görevliye göster</Text>
+              <Text style={styles.stepTitle}>QR kodunu veya kodunu görevliye göster</Text>
               <Text style={styles.stepDesc}>Teslim alma işlemini tamamlamak için.</Text>
             </View>
           </View>
@@ -301,22 +299,6 @@ const styles = StyleSheet.create({
     ...theme.FONTS.caption,
     color: theme.COLORS.textSecondary,
     marginBottom: theme.SIZES.s,
-  },
-  codeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: theme.SIZES.s,
-    marginBottom: theme.SIZES.s,
-  },
-  codeText: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: theme.COLORS.text,
-    letterSpacing: 2,
-  },
-  codeHint: {
-    ...theme.FONTS.caption,
-    color: theme.COLORS.textSecondary,
   },
   reminderNotice: {
     width: '100%',

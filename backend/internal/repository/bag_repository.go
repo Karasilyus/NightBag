@@ -117,15 +117,29 @@ func (r *BagRepository) CreateListing(ctx context.Context, in domain.CreateListi
 	}
 
 	const q = `
-	INSERT INTO bag_listings (business_id, title, category, description, content_tags, allergen_note,
-		original_value, price, quantity_total, quantity_remaining,
-		pickup_date, pickup_start, pickup_end, photo_url, status, published_at)
-	SELECT b.id, $3::text, $4::text::bag_category, NULLIF($5::text, ''), $6::text[], $7::text,
-		$8::numeric, $9::numeric, $10::int, $10::int,
-		$11::date, $12::time, $13::time, $14::text, 'published'::listing_status, now()
-	FROM businesses b
-	WHERE b.owner_id = $2 AND b.id = $1::uuid AND b.is_active
-	RETURNING id::text`
+	WITH created AS (
+		INSERT INTO bag_listings (business_id, title, category, description, content_tags, allergen_note,
+			original_value, price, quantity_total, quantity_remaining,
+			pickup_date, pickup_start, pickup_end, photo_url, status, published_at)
+		SELECT b.id, $3::text, $4::text::bag_category, NULLIF($5::text, ''), $6::text[], $7::text,
+			$8::numeric, $9::numeric, $10::int, $10::int,
+			$11::date, $12::time, $13::time, $14::text, 'published'::listing_status, now()
+		FROM businesses b
+		WHERE b.owner_id = $2 AND b.id = $1::uuid AND b.is_active
+		RETURNING id, business_id
+	), queued AS (
+		INSERT INTO favorite_listing_notification_deliveries (listing_id, expo_push_token)
+		SELECT created.id, dpt.expo_push_token
+		FROM created
+		JOIN favorite_businesses fb
+		  ON fb.business_id = created.business_id AND fb.notifications_enabled
+		JOIN users u ON u.id = fb.user_id AND u.notifications_enabled
+		JOIN device_push_tokens dpt ON dpt.user_id = u.id
+		ON CONFLICT (listing_id, expo_push_token) DO NOTHING
+		RETURNING listing_id
+	)
+	SELECT created.id::text
+	FROM created CROSS JOIN (SELECT count(*) FROM queued) AS queued_count`
 
 	var id string
 	err := r.pool.QueryRow(ctx, q,
@@ -487,6 +501,50 @@ func (r *BagRepository) ListFavoriteListings(ctx context.Context, userID string)
 		out = append(out, l)
 	}
 	return out, rows.Err()
+}
+
+func (r *BagRepository) ListFavoriteBusinesses(ctx context.Context, userID string) ([]domain.FavoriteBusiness, error) {
+	rows, err := r.pool.Query(ctx, `
+		SELECT b.id::text, b.name, b.photo_url, fb.notifications_enabled
+		FROM favorite_businesses fb
+		JOIN businesses b ON b.id = fb.business_id AND b.is_active
+		WHERE fb.user_id = $1
+		ORDER BY fb.created_at DESC, b.name`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	businesses := []domain.FavoriteBusiness{}
+	for rows.Next() {
+		var business domain.FavoriteBusiness
+		var photoURL *string
+		if err := rows.Scan(
+			&business.BusinessID,
+			&business.BusinessName,
+			&photoURL,
+			&business.NotificationsEnabled,
+		); err != nil {
+			return nil, err
+		}
+		business.PhotoURL = photoURL
+		businesses = append(businesses, business)
+	}
+	return businesses, rows.Err()
+}
+
+func (r *BagRepository) UpdateFavoriteBusinessNotifications(ctx context.Context, userID, businessID string, enabled bool) error {
+	result, err := r.pool.Exec(ctx, `
+		UPDATE favorite_businesses
+		SET notifications_enabled = $3
+		WHERE user_id = $1 AND business_id = $2`, userID, businessID, enabled)
+	if err != nil {
+		return err
+	}
+	if result.RowsAffected() == 0 {
+		return domain.ErrNotFound
+	}
+	return nil
 }
 
 func (r *BagRepository) GetUserPreferences(ctx context.Context, userID string) (*domain.UserPreferences, error) {

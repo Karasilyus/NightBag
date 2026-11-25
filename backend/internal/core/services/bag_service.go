@@ -206,6 +206,14 @@ func (s *BagService) ListFavoriteListings(ctx context.Context, userID string) ([
 	return s.repo.ListFavoriteListings(ctx, userID)
 }
 
+func (s *BagService) ListFavoriteBusinesses(ctx context.Context, userID string) ([]domain.FavoriteBusiness, error) {
+	return s.repo.ListFavoriteBusinesses(ctx, userID)
+}
+
+func (s *BagService) UpdateFavoriteBusinessNotifications(ctx context.Context, userID, businessID string, enabled bool) error {
+	return s.repo.UpdateFavoriteBusinessNotifications(ctx, userID, businessID, enabled)
+}
+
 func (s *BagService) GetUserPreferences(ctx context.Context, userID string) (*domain.UserPreferences, error) {
 	return s.repo.GetUserPreferences(ctx, userID)
 }
