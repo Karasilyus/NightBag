@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, SafeAreaView, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, SafeAreaView, Alert, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import theme from '../constants/theme';
 import { favoritesService } from '../services/favorites.service';
@@ -36,6 +36,22 @@ const BagDetailScreen = ({ route, navigation }: any) => {
       Alert.alert('Hata', 'Favori işletme güncellenemedi. Giriş yaptığından emin olup tekrar dene.');
     } finally {
       setIsUpdatingFavorite(false);
+    }
+  };
+
+  const openDirections = async () => {
+    const coordinate = bag?.coordinate;
+    if (!coordinate || !Number.isFinite(coordinate.latitude) || !Number.isFinite(coordinate.longitude)) {
+      Alert.alert('Konum bulunamadı', 'Bu işletme için yol tarifi alınabilecek bir konum bilgisi yok.');
+      return;
+    }
+
+    const destination = encodeURIComponent(`${coordinate.latitude},${coordinate.longitude}`);
+    try {
+      await Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${destination}`);
+    } catch (error) {
+      console.error('Yol tarifi açılamadı:', error);
+      Alert.alert('Yol tarifi açılamadı', 'Harita uygulaması açılamadı. Lütfen tekrar dene.');
     }
   };
 
@@ -124,6 +140,17 @@ const BagDetailScreen = ({ route, navigation }: any) => {
               <TouchableOpacity onPress={() => navigation.navigate('MainFlow', { screen: 'Map' } as any)}>
                 <Text style={styles.mapLink}>İşletmeyi gör {'>'}</Text>
               </TouchableOpacity>
+              {bag.coordinate && Number.isFinite(bag.coordinate.latitude) && Number.isFinite(bag.coordinate.longitude) && (
+                <TouchableOpacity
+                  style={styles.directionsButton}
+                  onPress={openDirections}
+                  accessibilityRole="button"
+                  accessibilityLabel="Google Haritalar'da yol tarifi al"
+                >
+                  <Ionicons name="navigate-outline" size={18} color={theme.COLORS.card} />
+                  <Text style={styles.directionsButtonText}>Yol tarifi al</Text>
+                </TouchableOpacity>
+              )}
             </View>
           </View>
         </View>
@@ -321,6 +348,22 @@ const styles = StyleSheet.create({
   mapLink: {
     ...theme.FONTS.body2,
     color: theme.COLORS.primary,
+    fontWeight: '600',
+  },
+  directionsButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: theme.SIZES.xs,
+    marginTop: theme.SIZES.m,
+    paddingHorizontal: theme.SIZES.m,
+    paddingVertical: theme.SIZES.s,
+    borderRadius: theme.SIZES.buttonRadius,
+    backgroundColor: theme.COLORS.primary,
+  },
+  directionsButtonText: {
+    ...theme.FONTS.body2,
+    color: theme.COLORS.card,
     fontWeight: '600',
   },
   bottomBar: {

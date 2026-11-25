@@ -16,6 +16,7 @@ interface SurpriseBagCardProps {
   originalPrice: number;
   imageUrl: string;
   remainingBags: number;
+  coordinate?: { latitude: number; longitude: number };
   isMapCard?: boolean; // Harita sayfasındaki yatay kartlar için
   isMapSidebarCard?: boolean;
   webGrid?: boolean;
@@ -32,6 +33,7 @@ const SurpriseBagCard: React.FC<SurpriseBagCardProps> = (props) => {
     originalPrice,
     imageUrl,
     remainingBags,
+    coordinate,
     isMapCard = false,
     isMapSidebarCard = false,
     webGrid = false,
@@ -105,7 +107,7 @@ const SurpriseBagCard: React.FC<SurpriseBagCardProps> = (props) => {
         isMapCard && styles.mapCard,
         isMapSidebarCard && styles.mapSidebarCard,
       ]}
-      onPress={() => navigation.navigate('BagDetails', { bag: { id: props.id, businessId: props.businessId, businessName, bagType, distance, timeInfo, price, originalPrice, imageUrl, remainingBags } })}
+      onPress={() => navigation.navigate('BagDetails', { bag: { id: props.id, businessId: props.businessId, businessName, bagType, distance, timeInfo, price, originalPrice, imageUrl, remainingBags, coordinate } })}
     >
       <View style={[
         styles.imageContainer,
